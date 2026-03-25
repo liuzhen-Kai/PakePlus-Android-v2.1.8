@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>铅酸蓄电池 - 终极科教版</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #334155; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        
+        .label {
+            position: absolute;
+            color: #fff;
+            font-size: 13px;
+            font-weight: bold;
+            padding: 6px 14px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(96, 165, 250, 0.4);
+            border-radius: 8px;
+            pointer-events: none; 
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            white-space: nowrap;
+            user-select: none;
+            backdrop-filter: blur(4px);
+            opacity: 0; 
+            transition: opacity 0.2s ease, border-color 0.3s;
+            z-index: 10;
+        }
+        .label.visible { opacity: 1; }
+        
+        .label-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px 6px 0;
+            border-style: solid;
+            border-color: inherit;
+            border-bottom-color: transparent;
+            border-left-color: transparent;
+            border-right-color: transparent;
+            border-top-color: rgba(15, 23, 42, 0.9);
+        }
+
+        #tooltip {
+            position: absolute;
+            transform: translate(0, -100%);
+            border-color: #38bdf8;
+            line-height: 1.5;
+            text-align: left;
+            white-space: pre-wrap;
+            z-index: 100;
+        }
+
+        #main-title {
+            position: absolute;
+            top: 25px;
+            left: 30px;
+            color: #fff;
+            font-size: 22px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            z-index: 20;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 65px;
+            left: 30px;
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 16px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            pointer-events: none;
+            max-width: 400px;
+        }
+
+        .equation-box { margin-bottom: 8px; font-size: 13px; color: #cbd5e1; }
+        .eq-title { display: inline-block; width: 45px; color: #94a3b8; font-weight: bold; }
+        .eq-text {
+            font-family: 'Consolas', monospace;
+            background: rgba(0,0,0,0.4);
+            padding: 3px 6px;
+            border-radius: 6px;
+            color: #34d399;
+            transition: all 0.3s;
+        }
+
+        .eq-sync { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-block; }
+        .txt-glow { color: #fef08a !important; text-shadow: 0 0 10px #facc15; transform: scale(1.15); font-weight: bold; }
+
+        #top-right-container {
+            position: absolute;
+            top: 25px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 15px;
+            z-index: 20;
+        }
+
+        .btn-tour { 
+            background: #8b5cf6; border-color: #a78bfa; padding: 6px 12px; font-size: 11px; font-weight: bold; border-radius: 8px;
+            color: white; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: all 0.2s; outline: none;
+        }
+        .btn-tour:hover:not(:disabled) { background: #7c3aed; box-shadow: 0 6px 20px rgba(139,92,246,0.6); transform: translateY(-2px); }
+        .btn-tour:disabled { background: #4c1d95; color: #94a3b8; border-color: #5b21b6; cursor: not-allowed; transform: none; box-shadow: none;}
+
+        #dashboard {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 12px 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            display: flex;
+            gap: 20px;
+            pointer-events: none;
+        }
+        .dash-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .dash-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+        .dash-value { font-size: 24px; font-weight: bold; color: #38bdf8; font-family: 'Consolas', monospace; font-variant-numeric: tabular-nums; transition: color 0.3s; }
+        .dash-unit { font-size: 12px; color: #94a3b8; font-weight: normal; }
+        
+        /* 温度报警颜色 */
+        .temp-hot { color: #f87171 !important; text-shadow: 0 0 10px rgba(248, 113, 113, 0.6); }
+
+        #bottom-controls {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 20;
+            background: rgba(15, 23, 42, 0.65);
+            padding: 10px 20px;
+            border-radius: 14px;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            white-space: nowrap;
+            width: max-content; 
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 8px 16px; 
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+            transition: all 0.2s;
+            white-space: nowrap;
+            min-width: 80px; 
+            outline: none;
+        }
+        button:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 5px 12px rgba(59,130,246,0.4); }
+        button.active { background: #10b981; border-color: #34d399; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4); }
+        button:disabled { background: #1e293b; color: #64748b; border-color: #334155; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        .btn-discharge { background: #ef4444; }
+        .btn-discharge:hover:not(:disabled) { background: #dc2626; box-shadow: 0 5px 12px rgba(239,68,68,0.4); }
+        .btn-charge { background: #10b981; }
+        .btn-charge:hover:not(:disabled) { background: #059669; box-shadow: 0 5px 12px rgba(16,185,129,0.4); }
+        .btn-aging { background: #be123c; border-color: #f43f5e; }
+        .btn-aging:hover:not(:disabled) { background: #9f1239; box-shadow: 0 5px 12px rgba(190,18,60,0.6); }
+        .btn-reset { background: #64748b; border-color: #94a3b8; }
+        .btn-reset:hover:not(:disabled) { background: #475569; box-shadow: 0 5px 12px rgba(71,85,105,0.6); }
+
+        .divider { width: 1px; height: 22px; background: rgba(255,255,255,0.2); margin: 0 4px; }
+        
+        .slider-container {
+            display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 13px; font-weight: bold; padding: 0 6px; white-space: nowrap;
+        }
+        input[type=range] { width: 80px; accent-color: #38bdf8; cursor: pointer; }
+
+        #tour-subtitle {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.85);
+            color: #fff;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 100;
+            text-align: center;
+            border: 2px solid #8b5cf6;
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.5);
+            display: none;
+            max-width: 80%;
+            letter-spacing: 1px;
+            pointer-events: none;
+        }
+
+        .explode-pos { border-color: #ef4444; color: #fca5a5; }
+        .explode-neg { border-color: #94a3b8; color: #cbd5e1; }
+        .explode-liq { border-color: #3b82f6; color: #93c5fd; }
+        .explode-cas { border-color: #475569; color: #94a3b8; }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: #94a3b8; font-weight: bold; z-index: 50;
+        }
+
+        /* ========== 返回主页按钮样式 ========== */
+        .global-back-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 300;
+            pointer-events: auto;
+            font-family: inherit;
+        }
+        .global-back-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</head>
+<body>
+    <!-- ========== 返回主页按钮（左下角） ========== -->
+    <button id="back-to-home" class="global-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        返回知识图谱
+    </button>
+
+    <div id="loading">正在加载科教级交互引擎...</div>
+    <div id="canvas-container"></div>
+    
+    <div id="main-title">铅酸蓄电池</div>
+    
+    <div id="info-panel">
+        <div class="equation-box">
+            <span class="eq-title">总反应:</span> 
+            <span class="eq-text">Pb + PbO₂ + 2H₂SO₄ ⇌ 2PbSO₄ + 2H₂O</span>
+        </div>
+        <div class="equation-box">
+            <span class="eq-title">负极:</span> 
+            <span class="eq-text">
+                Pb + <span id="eq-n-1" class="eq-sync">SO₄²⁻</span> - 2e⁻ ⇌ <span id="eq-n-2" class="eq-sync">PbSO₄</span>
+            </span>
+        </div>
+        <div class="equation-box" style="margin-bottom: 0;">
+            <span class="eq-title">正极:</span> 
+            <span class="eq-text">
+                <span id="eq-p-1" class="eq-sync">PbO₂ + 4H⁺</span> + <span id="eq-p-2" class="eq-sync">SO₄²⁻</span> + 2e⁻ ⇌ <span id="eq-p-3" class="eq-sync">PbSO₄</span> + <span id="eq-p-4" class="eq-sync">2H₂O</span>
+            </span>
+        </div>
+    </div>
+
+    <div id="top-right-container">
+        <div id="dashboard">
+            <div class="dash-item">
+                <span class="dash-label">端电压 (Voltage)</span>
+                <div><span class="dash-value" id="val-voltage">2.10</span><span class="dash-unit"> V</span></div>
+            </div>
+            <div class="divider" style="height: 30px;"></div>
+            <div class="dash-item">
+                <span class="dash-label">系统温度 (Temp)</span>
+                <div><span class="dash-value" id="val-temp">25.0</span><span class="dash-unit"> ℃</span></div>
+            </div>
+            <div class="divider" style="height: 30px;"></div>
+            <div class="dash-item">
+                <span class="dash-label">酸液浓度 (Conc.)</span>
+                <div><span class="dash-value" id="val-concentration">5.20</span><span class="dash-unit"> mol/L</span></div>
+            </div>
+        </div>
+        <button id="btn-tour" class="btn-tour" onclick="startTour()">💡 导览</button>
+    </div>
+
+    <div id="bottom-controls">
+        <button id="btn-macro" class="active" onclick="switchView('macro')">宏观实物</button>
+        <button id="btn-micro" onclick="switchView('micro')">微观结构</button>
+        <div class="divider"></div>
+        <button id="btn-discharge" class="btn-discharge" onclick="toggleDischarge()">放电</button>
+        <button id="btn-charge" class="btn-charge" onclick="toggleCharge()" disabled>充电</button>
+        <div class="divider"></div>
+        <button id="btn-aging" class="btn-aging" onclick="triggerAging()">⚠️ 深度放电</button>
+        <button id="btn-reset" class="btn-reset" onclick="triggerReset()">🔄 重置</button>
+        <div class="divider"></div>
+        <div class="slider-container">
+            <span>拆解</span>
+            <input type="range" id="explode-slider" min="0" max="1" step="0.01" value="0">
+        </div>
+    </div>
+
+    <div id="tour-subtitle"></div>
+    <div id="tooltip" class="label"></div>
+
+    <div id="label-ex-pos" class="label explode-pos">正极组 (包含 PbO₂ 极板与端子)</div>
+    <div id="label-ex-neg" class="label explode-neg">负极组 (包含 Pb 极板与端子)</div>
+    <div id="label-ex-liq" class="label explode-liq">电解液 (稀 H₂SO₄)</div>
+    <div id="label-ex-cas" class="label explode-cas">绝缘外壳 (ABS 塑料)</div>
+
+    <script>
+        // ========== 返回主页函数 ==========
+        function goBackHome() {
+            let currentPath = window.location.pathname;
+            let baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            let targetUrl = baseDir + 'index.html';
+            let debugDiv = document.createElement('div');
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.bottom = '100px';
+            debugDiv.style.left = '10px';
+            debugDiv.style.background = 'rgba(0,0,0,0.7)';
+            debugDiv.style.color = 'white';
+            debugDiv.style.padding = '8px';
+            debugDiv.style.borderRadius = '8px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.innerText = '返回主页: ' + targetUrl;
+            document.body.appendChild(debugDiv);
+            setTimeout(() => debugDiv.remove(), 1500);
+            window.location.href = targetUrl;
+        }
+
+        document.getElementById('back-to-home').addEventListener('click', goBackHome);
+    </script>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x334155); 
+        scene.fog = new THREE.FogExp2(0x334155, 0.025); 
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 0.5;
+        controls.maxDistance = 40;
+
+        document.getElementById('loading').style.display = 'none';
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 15, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        const gapLight = new THREE.PointLight(0x60a5fa, 0.8, 6); 
+        gapLight.position.set(0.5, -1.0, 0); 
+        scene.add(gapLight);
+
+        const macroGroup = new THREE.Group();
+        const posGroup = new THREE.Group();
+        const negGroup = new THREE.Group();
+        const liqGroup = new THREE.Group();
+        const casingGroup = new THREE.Group();
+        const loadGroup = new THREE.Group();
+        macroGroup.add(posGroup, negGroup, liqGroup, casingGroup, loadGroup);
+        
+        const microGroup = new THREE.Group();
+        scene.add(macroGroup);
+        scene.add(microGroup);
+
+        const colors = {
+            posActive: new THREE.Color(0x7f1d1d),
+            negActive: new THREE.Color(0x64748b),
+            discharged: new THREE.Color(0xcbd5e1),
+            deadCrystal: new THREE.Color(0x9ca3af),
+            cpkPb: new THREE.Color(0x575961), 
+            cpkO: new THREE.Color(0xef4444),  
+            cpkS: new THREE.Color(0xfacc15),  
+            cpkH: new THREE.Color(0xe0f2fe),  
+            electron: new THREE.Color(0xfef08a) 
+        };
+
+        const viewProxy = { macroAlpha: 1, microAlpha: 0 };
+
+        const macroMat = {
+            casing: new THREE.MeshStandardMaterial({ color: 0x1e293b, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }),
+            posPlate: new THREE.MeshStandardMaterial({ color: colors.posActive, roughness: 0.9, transparent: true }),
+            negPlate: new THREE.MeshStandardMaterial({ color: colors.negActive, roughness: 0.8, transparent: true }),
+            liquid: new THREE.MeshPhysicalMaterial({ color: 0x3b82f6, transmission: 0.6, transparent: true, roughness: 0.1, depthWrite: false })
+        };
+
+        const microMat = {
+            pb: new THREE.MeshStandardMaterial({ color: colors.cpkPb, metalness: 0.6, roughness: 0.4, transparent: true }),
+            oBulk: new THREE.MeshStandardMaterial({ color: colors.cpkO, roughness: 0.3, transparent: true }),
+            oActive: new THREE.MeshStandardMaterial({ color: colors.cpkO, roughness: 0.3, transparent: true }),
+            oBg: new THREE.MeshStandardMaterial({ color: colors.cpkO, roughness: 0.3, transparent: true }),
+            sBg: new THREE.MeshStandardMaterial({ color: colors.cpkS, roughness: 0.3, transparent: true }),
+            sActive: new THREE.MeshStandardMaterial({ color: colors.cpkS, roughness: 0.3, transparent: true }),
+            hBg: new THREE.MeshStandardMaterial({ color: colors.cpkH, roughness: 0.1, transparent: true }),
+            hActive: new THREE.MeshStandardMaterial({ color: colors.cpkH, roughness: 0.1, transparent: true }),
+            electron: new THREE.MeshBasicMaterial({ color: colors.electron, transparent: true }) 
+        };
+
+        const deadMat = new THREE.MeshStandardMaterial({ color: colors.deadCrystal, roughness: 0.9, transparent: true });
+
+        const plateW = 0.2, plateH = 5.0, plateD = 6.0;
+        
+        [-2, 0, 2].forEach(x => { 
+            const p = new THREE.Mesh(new THREE.BoxGeometry(plateW, plateH, plateD), macroMat.posPlate);
+            p.position.set(x, 0, 0); p.userData = { tooltip: "正极板\n活性物质：二氧化铅 (PbO₂)" };
+            posGroup.add(p);
+        });
+        const posStrap = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.4, 0.8), macroMat.posPlate);
+        posStrap.position.set(0, 2.7, 2.2); posStrap.userData = { tooltip: "正极汇流排\n(连接所有正极板)" };
+        const posTerminal = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.5, 32), macroMat.posPlate);
+        posTerminal.position.set(1.5, 3.25, 2.2); posTerminal.userData = { tooltip: "正极接线端子 (+)\n(连接外部负载)" };
+        posGroup.add(posStrap); posGroup.add(posTerminal);
+
+        [-3, -1, 1, 3].forEach(x => { 
+            const p = new THREE.Mesh(new THREE.BoxGeometry(plateW, plateH, plateD), macroMat.negPlate);
+            p.position.set(x, 0, 0); p.userData = { tooltip: "负极板\n活性物质：海绵铅 (Pb)" };
+            negGroup.add(p);
+        });
+        const negStrap = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.4, 0.8), macroMat.negPlate);
+        negStrap.position.set(0, 2.7, -2.2); negStrap.userData = { tooltip: "负极汇流排\n(连接所有负极板)" };
+        const negTerminal = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.5, 32), macroMat.negPlate);
+        negTerminal.position.set(-2, 3.25, -2.2); negTerminal.userData = { tooltip: "负极接线端子 (-)\n(连接外部负载)" };
+        negGroup.add(negStrap); negGroup.add(negTerminal);
+
+        const liquidBox = new THREE.Mesh(new THREE.BoxGeometry(7.8, 4.5, 6.8), macroMat.liquid);
+        liquidBox.position.set(0, -0.25, 0); liquidBox.userData = { tooltip: "电解液 (稀 H₂SO₄)" };
+        liqGroup.add(liquidBox);
+
+        const casingBox = new THREE.Mesh(new THREE.BoxGeometry(8.6, 6.5, 7.6), macroMat.casing);
+        casingBox.position.set(0, 0.5, 0); casingGroup.add(casingBox);
+
+        // --- 导线与流光粒子 ---
+        const wireMat = new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.3, gapSize: 0.2, linewidth: 2 });
+        const curvePos = new THREE.QuadraticBezierCurve3(new THREE.Vector3(1.5, 3.8, 2.2), new THREE.Vector3(3, 6, 1), new THREE.Vector3(0.5, 7, 0));
+        const wirePosMesh = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curvePos.getPoints(50)), wireMat);
+        wirePosMesh.computeLineDistances();
+        const curveNeg = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-2, 3.8, -2.2), new THREE.Vector3(-3.5, 6, -1), new THREE.Vector3(-0.5, 7, 0));
+        const wireNegMesh = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curveNeg.getPoints(50)), wireMat);
+        wireNegMesh.computeLineDistances();
+        loadGroup.add(wirePosMesh, wireNegMesh);
+
+        // 流光粒子
+        const pGeo = new THREE.SphereGeometry(0.15, 16, 16);
+        const pMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const particlePos = new THREE.Mesh(pGeo, pMat);
+        const particleNeg = new THREE.Mesh(pGeo, pMat);
+        loadGroup.add(particlePos, particleNeg);
+
+        const bulbGroup = new THREE.Group();
+        bulbGroup.position.set(0, 7, 0);
+        const bulbGlass = new THREE.Mesh(new THREE.SphereGeometry(0.7, 32, 32), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.6, emissive: 0xfacc15, emissiveIntensity: 0}));
+        const bulbBase = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.4), new THREE.MeshStandardMaterial({color: 0x555555}));
+        bulbBase.position.y = -0.8;
+        const bulbLight = new THREE.PointLight(0xfef08a, 0, 15);
+        bulbGroup.add(bulbGlass, bulbBase, bulbLight);
+        loadGroup.add(bulbGroup);
+
+        const chargerGroup = new THREE.Group();
+        chargerGroup.position.set(0, 7, 0);
+        const chargerBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 1.2), new THREE.MeshStandardMaterial({color: 0x10b981}));
+        const pr1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.2), new THREE.MeshStandardMaterial({color: 0xcccccc})); pr1.position.set(-0.3, 0.6, 0);
+        const pr2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.2), new THREE.MeshStandardMaterial({color: 0xcccccc})); pr2.position.set(0.3, 0.6, 0);
+        chargerGroup.add(chargerBody, pr1, pr2);
+        loadGroup.add(chargerGroup);
+        chargerGroup.visible = false;
+
+        macroGroup.position.y = -1;
+        microGroup.position.y = -1; 
+
+        // --- 4. 微观引擎 ---
+        const sphereGeo = new THREE.SphereGeometry(1, 32, 32);
+        function createAtom(mat, r, x, y, z) {
+            const mesh = new THREE.Mesh(sphereGeo, mat);
+            mesh.scale.set(r, r, r); mesh.position.set(x, y, z); return mesh;
+        }
+
+        const ROWS = 2, COLS = 3, LAYERS = 2; 
+        const NUM_SITES = ROWS * COLS * LAYERS; 
+        const activeSitesPos = [];
+        const activeSitesNeg = [];
+        const electrons = []; 
+        const bgIons = []; 
+        const liquidZone = new THREE.Group();
+        microGroup.add(liquidZone);
+
+        function createSO4Group(isActive) {
+            const g = new THREE.Group();
+            let sMat = isActive ? microMat.sActive : microMat.sBg;
+            let oMat = isActive ? microMat.oActive : microMat.oBg;
+            g.add(createAtom(sMat, 0.025, 0, 0, 0)); 
+            const d = 0.022; 
+            const pos = [new THREE.Vector3(d,d,d), new THREE.Vector3(d,-d,-d), new THREE.Vector3(-d,d,-d), new THREE.Vector3(-d,-d,d)];
+            pos.forEach(p => g.add(createAtom(oMat, 0.020, p.x, p.y, p.z)));
+            return g;
+        }
+
+        for(let l=0; l<LAYERS; l++) {
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    let origY = -0.1 + r * 0.2, origZ = -0.2 + c * 0.2;
+                    let pOrigX = 0.1 - l * 0.04, nOrigX = 0.9 + l * 0.04;
+                    let expandY = -0.2 + r * 0.4, expandZ = -0.28 + c * 0.28;
+                    let pExpX = 0.16 - l * 0.06, nExpX = 0.84 + l * 0.06;
+
+                    let pSo4DockX = pExpX + 0.02, nSo4DockX = nExpX - 0.02;
+                    let so4DockY = expandY + 0.1, so4DockZ = expandZ + 0.14;
+
+                    let pb_p = createAtom(microMat.pb, 0.035, pOrigX, origY, origZ); 
+                    let o1 = createAtom(microMat.oActive, 0.022, pOrigX+0.025, origY+0.025, origZ+0.025);
+                    let o2 = createAtom(microMat.oActive, 0.022, pOrigX+0.025, origY-0.025, origZ-0.025);
+                    microGroup.add(pb_p); microGroup.add(o1); microGroup.add(o2);
+
+                    let so4_p = createSO4Group(true); 
+                    let h1 = createAtom(microMat.hActive, 0.012, 0,0,0); let h2 = createAtom(microMat.hActive, 0.012, 0,0,0);
+                    let h3 = createAtom(microMat.hActive, 0.012, 0,0,0); let h4 = createAtom(microMat.hActive, 0.012, 0,0,0); 
+                    liquidZone.add(so4_p); liquidZone.add(h1); liquidZone.add(h2); liquidZone.add(h3); liquidZone.add(h4);
+
+                    let e_p = createAtom(microMat.electron, 0.008, pOrigX, 1.0, origZ); microGroup.add(e_p);
+                    electrons.push({ mesh: e_p, startY: 1.0, targetY: origY, x: pOrigX, z: origZ, type: 'pos' });
+
+                    activeSitesPos.push({
+                        layer: l, pb: pb_p, o1, o2, so4: so4_p, h1, h2, h3, h4,
+                        pbOrig: new THREE.Vector3(pOrigX, origY, origZ), pbDest: new THREE.Vector3(pExpX, expandY, expandZ), 
+                        idleSO4: new THREE.Vector3(0.4, origY + (Math.random()-0.5)*0.05, origZ), waitSO4: new THREE.Vector3(0.25, origY, origZ), dockSO4: new THREE.Vector3(pSo4DockX, so4DockY, so4DockZ), 
+                        idleH1: new THREE.Vector3(0.3 + Math.random()*0.1, origY + 0.05, origZ + 0.05), idleH2: new THREE.Vector3(0.3 + Math.random()*0.1, origY - 0.05, origZ + 0.05),
+                        idleH3: new THREE.Vector3(0.3 + Math.random()*0.1, origY + 0.05, origZ - 0.05), idleH4: new THREE.Vector3(0.3 + Math.random()*0.1, origY - 0.05, origZ - 0.05),
+                        idleWater1: new THREE.Vector3(0.5, origY + 0.1, origZ + 0.1), idleWater2: new THREE.Vector3(0.5, origY - 0.1, origZ - 0.1),
+                        dockH1: new THREE.Vector3(pOrigX+0.04, origY+0.04, origZ+0.04), dockH2: new THREE.Vector3(pOrigX+0.01, origY+0.01, origZ+0.01),
+                        dockH3: new THREE.Vector3(pOrigX-0.01, origY-0.01, origZ-0.01), dockH4: new THREE.Vector3(pOrigX-0.04, origY-0.04, origZ-0.04),
+                        o1Start: new THREE.Vector3(pOrigX+0.025, origY+0.025, origZ+0.025), o2Start: new THREE.Vector3(pOrigX+0.025, origY-0.025, origZ-0.025),
+                        rotOffset: Math.random() * 10, local_rp: 0, isDead: false 
+                    });
+
+                    let pb_n = createAtom(microMat.pb, 0.035, nOrigX, origY, origZ);
+                    microGroup.add(pb_n);
+                    let so4_n = createSO4Group(true); liquidZone.add(so4_n); 
+                    
+                    let e_n = createAtom(microMat.electron, 0.008, nOrigX, origY, origZ); microGroup.add(e_n);
+                    electrons.push({ mesh: e_n, startY: origY, targetY: 1.0, x: nOrigX, z: origZ, type: 'neg' });
+
+                    activeSitesNeg.push({
+                        layer: l, pb: pb_n, so4: so4_n, 
+                        pbOrig: new THREE.Vector3(nOrigX, origY, origZ), pbDest: new THREE.Vector3(nExpX, expandY, expandZ),
+                        idleSO4: new THREE.Vector3(0.6, origY + (Math.random()-0.5)*0.05, origZ), waitSO4: new THREE.Vector3(0.75, origY, origZ), dockSO4: new THREE.Vector3(nSo4DockX, so4DockY, so4DockZ), 
+                        rotOffset: Math.random() * 10, local_rp: 0, isDead: false
+                    });
+                }
+            }
+        }
+
+        for(let i=0; i<3; i++) {
+            let s = createSO4Group(false); liquidZone.add(s);
+            bgIons.push({ type: 'so4', mesh: s, pos: new THREE.Vector3(0.5, (Math.random()-0.5)*0.3, (Math.random()-0.5)*0.3), offset: Math.random()*10 });
+        }
+        for(let i=0; i<6; i++) {
+            let h = createAtom(microMat.hBg, 0.012, 0,0,0); liquidZone.add(h);
+            bgIons.push({ type: 'h', mesh: h, pos: new THREE.Vector3(0.5, (Math.random()-0.5)*0.3, (Math.random()-0.5)*0.3), offset: Math.random()*10 });
+        }
+
+        // --- 5. 交互控制、导览与热力学系统 ---
+        // 增加 temp 变量用于物理拟真热震动
+        let chargeState = { level: 1.0, action: 'idle', time: 0, temp: 25.0 }; 
+        let currentTween = null;
+        let isAgingTriggered = false;
+        let tourTimeline = null;
+        let isViewAnimating = false;
+        let currentView = 'macro';
+
+        const explodeSlider = document.getElementById('explode-slider');
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(-2, -2);
+        let mousePx = { x: 0, y: 0 };
+        const tooltip = document.getElementById('tooltip');
+
+        window.addEventListener('mousemove', (e) => {
+            mousePx.x = e.clientX; mousePx.y = e.clientY;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        explodeSlider.addEventListener('input', (e) => {
+            if (currentView !== 'macro') return;
+            const val = parseFloat(e.target.value);
+            posGroup.position.y = val * 8;
+            negGroup.position.y = val * 4;
+            liqGroup.position.y = val * 0;
+            casingGroup.position.y = val * -5;
+            loadGroup.position.y = val * 10;
+        });
+
+        function applyAlphaRules() {
+            const isFullyMicro = viewProxy.microAlpha > 0.99;
+            macroGroup.visible = !isFullyMicro;
+            loadGroup.visible = !isFullyMicro;
+
+            if (!isFullyMicro) {
+                macroMat.casing.opacity = viewProxy.macroAlpha * 0.5;
+                macroMat.liquid.opacity = viewProxy.macroAlpha * 0.6;
+                macroMat.posPlate.opacity = viewProxy.macroAlpha * 1.0;
+                macroMat.negPlate.opacity = viewProxy.macroAlpha * 1.0;
+            }
+
+            microMat.pb.opacity = viewProxy.microAlpha; 
+            microMat.oActive.opacity = viewProxy.microAlpha; 
+            microMat.hActive.opacity = viewProxy.microAlpha;
+            microMat.sActive.opacity = viewProxy.microAlpha;
+            deadMat.opacity = viewProxy.microAlpha; 
+
+            const acidConcentration = 0.1 + 0.9 * chargeState.level; 
+            microMat.sBg.opacity = viewProxy.microAlpha * acidConcentration;
+            microMat.oBg.opacity = viewProxy.microAlpha * acidConcentration; 
+            microMat.hBg.opacity = viewProxy.microAlpha * acidConcentration;
+            microMat.oBulk.opacity = viewProxy.microAlpha * chargeState.level; 
+            
+            microMat.electron.opacity = viewProxy.microAlpha * (chargeState.action.includes('discharging') || chargeState.action.includes('charging') ? 1 : 0);
+        }
+
+        // --- 💡 智能导览系统 ---
+        function setSubtitle(text) {
+            const sub = document.getElementById('tour-subtitle');
+            sub.style.display = 'block';
+            sub.innerHTML = text;
+            gsap.fromTo(sub, {opacity: 0, y: 20}, {opacity: 1, y: 0, duration: 0.5});
+        }
+        function hideSubtitle() {
+            const sub = document.getElementById('tour-subtitle');
+            gsap.to(sub, {opacity: 0, duration: 0.5, onComplete: () => sub.style.display = 'none'});
+        }
+
+        window.startTour = function() {
+            triggerReset();
+            
+            setTimeout(() => {
+                document.querySelectorAll('button').forEach(b => { if(b.id !== 'btn-reset') b.disabled = true; });
+                explodeSlider.disabled = true;
+                controls.enabled = false;
+
+                if (currentView !== 'macro') switchView('macro');
+
+                tourTimeline = gsap.timeline({
+                    onComplete: () => {
+                        document.querySelectorAll('button').forEach(b => b.disabled = false);
+                        document.getElementById('btn-charge').disabled = true; 
+                        explodeSlider.disabled = false;
+                        controls.enabled = true;
+                        hideSubtitle();
+                    }
+                });
+
+                tourTimeline.call(() => setSubtitle("💡 欢迎进入沉浸式导览。首先展示的是铅酸电池的宏观实物结构。"))
+                            .to(camera.position, {x: 12, y: 10, z: 15, duration: 2})
+                            .to(controls.target, {x: 0, y: -1, z: 0, duration: 2}, "<")
+                            .to({}, {duration: 3});
+
+                tourTimeline.call(() => setSubtitle("🔍 左侧是【正极组】，涂有红棕色的活性物质：二氧化铅 (PbO₂)。"))
+                            .to(camera.position, {x: 8, y: 5, z: 10, duration: 2})
+                            .to(controls.target, {x: 2, y: -1, z: 0, duration: 2}, "<")
+                            .to({}, {duration: 3});
+
+                tourTimeline.call(() => setSubtitle("🔍 右侧是【负极组】，由灰色的海绵状纯铅 (Pb) 构成。"))
+                            .to(camera.position, {x: -8, y: 5, z: 10, duration: 2})
+                            .to(controls.target, {x: -2, y: -1, z: 0, duration: 2}, "<")
+                            .to({}, {duration: 3});
+
+                tourTimeline.call(() => {
+                                setSubtitle("⚛️ 现在，镜头将自动接管，带您潜入极板表面的原子微观世界...");
+                                switchView('micro');
+                            })
+                            .to({}, {duration: 3.5});
+
+                tourTimeline.call(() => setSubtitle("🔋 深灰是铅，红色是氧，黄色四面体是硫酸根。准备自动触发放电！"))
+                            .to({}, {duration: 3.5});
+
+                tourTimeline.call(() => {
+                                setSubtitle("⚡ 【第一阶段】放电开始！看左上角方程式联动。无数的 H⁺ 正像蜂群涌向正极...");
+                                toggleDischarge(); 
+                            })
+                            .to({}, {duration: 3.5}); 
+
+                tourTimeline.call(() => setSubtitle("💧 【第二阶段】氢离子强行夺走晶格中的氧，结合成水分子 (H₂O) 游离。"))
+                            .to({}, {duration: 3.5});
+
+                tourTimeline.call(() => setSubtitle("🧱 【第三阶段】失去氧的晶格被撑开，庞大的 SO₄²⁻ 迅速嵌入空位！"))
+                            .to({}, {duration: 3.5});
+
+                tourTimeline.call(() => setSubtitle("✅ 导览结束！正负极双双重构为致密的 PbSO₄ 晶格网络。您可以自由探索了。"))
+                            .to({}, {duration: 4});
+            }, 50);
+        };
+
+        window.triggerAging = function() {
+            if(chargeState.action !== 'idle' || chargeState.level <= 0) return;
+            isAgingTriggered = true;
+            toggleDischarge();
+        };
+
+        window.triggerReset = function() {
+            if (currentTween) currentTween.kill();
+            if (tourTimeline) { tourTimeline.kill(); tourTimeline = null; hideSubtitle(); controls.enabled = true; }
+            
+            chargeState.level = 1.0;
+            chargeState.action = 'idle';
+            chargeState.time = 0;
+            chargeState.temp = 25.0;
+            isAgingTriggered = false;
+
+            activeSitesPos.forEach(site => {
+                site.isDead = false;
+                site.pb.material = microMat.pb;
+                site.so4.children.forEach((c, index) => {
+                    if(c.material) c.material = (index === 0) ? microMat.sActive : microMat.oActive;
+                });
+            });
+
+            activeSitesNeg.forEach(site => {
+                site.isDead = false;
+                site.pb.material = microMat.pb;
+                site.so4.children.forEach((c, index) => {
+                    if(c.material) c.material = (index === 0) ? microMat.sActive : microMat.oActive;
+                });
+            });
+
+            explodeSlider.value = 0;
+            explodeSlider.disabled = false;
+            posGroup.position.y = 0;
+            negGroup.position.y = 0;
+            liqGroup.position.y = 0;
+            casingGroup.position.y = 0;
+            loadGroup.position.y = 0;
+
+            const btnD = document.getElementById('btn-discharge');
+            const btnC = document.getElementById('btn-charge');
+            const btnA = document.getElementById('btn-aging');
+            const btnT = document.getElementById('btn-tour');
+
+            btnD.innerText = '放电';
+            btnD.disabled = false;
+            btnC.innerText = '充电';
+            btnC.disabled = true;
+            btnA.disabled = false;
+            btnT.disabled = false;
+
+            document.querySelectorAll('.eq-text').forEach(el => el.classList.remove('highlight-eq'));
+            document.querySelectorAll('.eq-sync').forEach(el => el.classList.remove('txt-glow'));
+        };
+
+        window.toggleDischarge = function() {
+            const btnD = document.getElementById('btn-discharge');
+            const btnC = document.getElementById('btn-charge');
+            const btnA = document.getElementById('btn-aging');
+            
+            if (chargeState.level <= 0 && chargeState.action === 'idle') return;
+
+            if (chargeState.action === 'charging' || chargeState.action === 'paused_charging') {
+                if (currentTween) currentTween.kill();
+                chargeState.action = 'idle';
+            }
+
+            if (chargeState.action === 'discharging') {
+                currentTween.pause();
+                chargeState.action = 'paused_discharging';
+                btnD.innerText = '继续放电';
+                btnC.disabled = false; 
+            } else if (chargeState.action === 'paused_discharging') {
+                currentTween.resume();
+                chargeState.action = 'discharging';
+                btnD.innerText = '暂停放电';
+                btnC.disabled = true; 
+            } else {
+                chargeState.action = 'discharging';
+                btnD.innerText = '暂停放电';
+                btnC.disabled = true;
+                btnA.disabled = true;
+                btnC.innerText = '充电';
+                
+                const remaining = 10 * chargeState.level; 
+                currentTween = gsap.to(chargeState, {
+                    level: 0, duration: remaining, ease: "none",
+                    onComplete: () => {
+                        chargeState.action = 'idle';
+                        btnD.innerText = '放电'; btnD.disabled = true;
+                        btnC.disabled = false; btnA.disabled = false;
+                        if(isAgingTriggered) {
+                            let count = 0;
+                            while(count < 4) {
+                                let ri = Math.floor(Math.random()*NUM_SITES);
+                                if(!activeSitesPos[ri].isDead){
+                                    activeSitesPos[ri].isDead = true;
+                                    activeSitesNeg[ri].isDead = true;
+                                    count++;
+                                }
+                            }
+                            isAgingTriggered = false;
+                        }
+                    }
+                });
+            }
+            document.querySelectorAll('.eq-text').forEach(el => el.classList.toggle('highlight-eq', chargeState.action.includes('charging') || chargeState.action.includes('discharging')));
+        }
+
+        window.toggleCharge = function() {
+            const btnD = document.getElementById('btn-discharge');
+            const btnC = document.getElementById('btn-charge');
+            const btnA = document.getElementById('btn-aging');
+
+            if (chargeState.level >= 1 && chargeState.action === 'idle') return;
+
+            if (chargeState.action === 'discharging' || chargeState.action === 'paused_discharging') {
+                if (currentTween) currentTween.kill();
+                chargeState.action = 'idle';
+            }
+
+            if (chargeState.action === 'charging') {
+                currentTween.pause();
+                chargeState.action = 'paused_charging';
+                btnC.innerText = '继续充电';
+                btnD.disabled = false;
+                btnA.disabled = false;
+            } else if (chargeState.action === 'paused_charging') {
+                currentTween.resume();
+                chargeState.action = 'charging';
+                btnC.innerText = '暂停充电';
+                btnD.disabled = true;
+                btnA.disabled = true;
+            } else {
+                chargeState.action = 'charging';
+                btnC.innerText = '暂停充电';
+                btnD.disabled = true;
+                btnA.disabled = true;
+                btnD.innerText = '放电';
+                
+                const remaining = 10 * (1 - chargeState.level);
+                currentTween = gsap.to(chargeState, {
+                    level: 1, duration: remaining, ease: "none",
+                    onComplete: () => {
+                        chargeState.action = 'idle';
+                        btnC.innerText = '充电';
+                        btnC.disabled = true;
+                        btnD.disabled = false;
+                        btnA.disabled = false;
+                    }
+                });
+            }
+            document.querySelectorAll('.eq-text').forEach(el => el.classList.toggle('highlight-eq', chargeState.action.includes('charging') || chargeState.action.includes('discharging')));
+        }
+        
+        window.switchView = function(view) {
+            if (currentView === view || isViewAnimating) return;
+            currentView = view;
+            isViewAnimating = true;
+
+            document.getElementById('btn-macro').classList.toggle('active', view === 'macro');
+            document.getElementById('btn-micro').classList.toggle('active', view === 'micro');
+            explodeSlider.disabled = (view === 'micro'); 
+
+            if (view === 'micro') {
+                gsap.to(camera.position, { x: 0.5, y: -1.0, z: 1.1, duration: 2, ease: "power3.inOut" });
+                gsap.to(controls.target, { x: 0.5, y: -1.0, z: 0, duration: 2, ease: "power3.inOut", onUpdate: () => controls.update() });
+                gsap.to(viewProxy, { macroAlpha: 0, microAlpha: 1, duration: 1.8, onUpdate: applyAlphaRules, onComplete: () => {
+                    isViewAnimating = false;
+                }});
+            } else {
+                gsap.to(camera.position, { x: 12, y: 10, z: 15, duration: 2, ease: "power3.inOut" });
+                gsap.to(controls.target, { x: 0, y: -1, z: 0, duration: 2, ease: "power3.inOut", onUpdate: () => controls.update() });
+                gsap.to(viewProxy, { macroAlpha: 1, microAlpha: 0, duration: 1.5, onUpdate: applyAlphaRules, onComplete: () => isViewAnimating = false });
+            }
+        };
+
+        // --- 6. 渲染循环 ---
+        const clock = new THREE.Clock();
+        const qIdle = new THREE.Quaternion(), qDock = new THREE.Quaternion();
+        const eDockL = new THREE.Euler(Math.PI/4, Math.PI/4, Math.PI/4), eDockR = new THREE.Euler(-Math.PI/4, -Math.PI/4, -Math.PI/4);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            const time = clock.getElapsedTime();
+            
+            // 🌡️ 热力学系统计算
+            let targetTemp = 25.0;
+            if (chargeState.action === 'discharging') {
+                chargeState.time += 0.1; 
+                targetTemp = 42.0; // 放电发热
+            } else if (chargeState.action === 'charging') {
+                chargeState.time += 0.1;
+                targetTemp = 35.0; // 充电微热
+            }
+            // 平滑升温/降温
+            chargeState.temp += (targetTemp - chargeState.temp) * 0.02;
+            const tempValEl = document.getElementById('val-temp');
+            tempValEl.innerText = chargeState.temp.toFixed(1);
+            if(chargeState.temp > 35) tempValEl.classList.add('temp-hot'); else tempValEl.classList.remove('temp-hot');
+            
+            // 物理热震荡振幅 (基于温度)
+            const thermalJitter = Math.max(0, (chargeState.temp - 25.0)) * 0.0003;
+
+            const global_rp = 1.0 - chargeState.level; 
+            applyAlphaRules(); 
+
+            // 物理仪表盘
+            document.getElementById('val-voltage').innerText = (1.80 + 0.30 * chargeState.level).toFixed(2);
+            document.getElementById('val-concentration').innerText = (1.50 + 3.70 * chargeState.level).toFixed(2);
+
+            // 💡 宏观负载联动与流光粒子
+            if(chargeState.action === 'discharging') {
+                bulbGroup.visible = true; chargerGroup.visible = false;
+                particlePos.visible = particleNeg.visible = true;
+                
+                bulbLight.intensity = chargeState.level * 15; 
+                bulbGlass.material.emissiveIntensity = chargeState.level * 2;
+                
+                // 粒子沿贝塞尔曲线运动
+                let pt = (time * 0.8) % 1.0;
+                particlePos.position.copy(curvePos.getPointAt(pt));
+                particleNeg.position.copy(curveNeg.getPointAt(1 - pt)); // 负极流回
+
+            } else if(chargeState.action === 'charging') {
+                bulbGroup.visible = false; chargerGroup.visible = true;
+                particlePos.visible = particleNeg.visible = true;
+
+                chargerGroup.position.y = 8.5 + Math.sin(time*2)*0.1; 
+                
+                let pt = (time * 0.8) % 1.0;
+                particlePos.position.copy(curvePos.getPointAt(1 - pt)); // 充电反向流动
+                particleNeg.position.copy(curveNeg.getPointAt(pt));
+
+            } else {
+                bulbLight.intensity = 0; bulbGlass.material.emissiveIntensity = 0;
+                chargerGroup.visible = false;
+                particlePos.visible = particleNeg.visible = false;
+                bulbGroup.visible = chargeState.level <= 0.1; 
+            }
+
+            // 🎯 方程式同步高亮
+            document.querySelectorAll('.eq-sync').forEach(el => el.classList.remove('txt-glow'));
+            if(chargeState.action.includes('discharging') || chargeState.action.includes('charging')){
+                if(global_rp < 0.3) {
+                    document.getElementById('eq-p-1').classList.add('txt-glow');
+                } else if(global_rp < 0.6) {
+                    document.getElementById('eq-p-4').classList.add('txt-glow');
+                } else {
+                    document.getElementById('eq-p-2').classList.add('txt-glow');
+                    document.getElementById('eq-p-3').classList.add('txt-glow');
+                    document.getElementById('eq-n-1').classList.add('txt-glow');
+                    document.getElementById('eq-n-2').classList.add('txt-glow');
+                }
+            }
+
+            macroMat.posPlate.color.lerpColors(colors.posActive, colors.discharged, global_rp);
+            macroMat.negPlate.color.lerpColors(colors.negActive, colors.discharged, global_rp);
+
+            if (chargeState.action.includes('discharging') || chargeState.action.includes('charging')) {
+                electrons.forEach((e, idx) => {
+                    let phase = (chargeState.time * 3 + idx * 0.3) % 1.0; 
+                    if (chargeState.action.includes('charging')) phase = 1.0 - phase; 
+                    if (e.type === 'neg') {
+                        e.mesh.position.set(e.x, e.startY + (e.targetY - e.startY) * phase, e.z + Math.sin(phase*20)*0.01);
+                    } else {
+                        e.mesh.position.set(e.x, e.startY + (e.targetY - e.startY) * phase, e.z + Math.cos(phase*20)*0.01);
+                    }
+                });
+            }
+
+            const overlap = 0.8; 
+            activeSitesPos.forEach((site, i) => {
+                const orderIndex = site.layer * (ROWS * COLS) + (i % (ROWS * COLS));
+                const start = (orderIndex / NUM_SITES) * (1 - overlap);
+                const end = start + overlap;
+                let local_rp = Math.max(0, Math.min(1, (global_rp - start) / (end - start)));
+                
+                // ⚠️ 老化死晶体锁死逻辑
+                if(site.isDead) {
+                    local_rp = 1.0; 
+                    site.pb.material = deadMat;
+                    site.pb.scale.setScalar(0.06); 
+                    site.so4.children.forEach(c => { if(c.material) c.material = deadMat; });
+                }
+                
+                site.local_rp = local_rp; 
+
+                let p1 = Math.min(Math.max(local_rp / 0.3, 0), 1);         
+                let p2 = Math.min(Math.max((local_rp - 0.3) / 0.3, 0), 1);   
+                let p3 = Math.min(Math.max((local_rp - 0.6) / 0.4, 0), 1);   
+
+                // 添加物理热震荡
+                let jitterX = Math.sin(time * 40 + i) * thermalJitter;
+                let jitterY = Math.cos(time * 50 + i) * thermalJitter;
+
+                site.pb.position.lerpVectors(site.pbOrig, site.pbDest, Math.max(p2, p3)); 
+                site.pb.position.x += jitterX; site.pb.position.y += jitterY;
+
+                let w1Center = new THREE.Vector3().lerpVectors(site.o1Start, site.idleWater1, p2);
+                let w2Center = new THREE.Vector3().lerpVectors(site.o2Start, site.idleWater2, p2);
+                if (p2 > 0) {
+                    let drift = new THREE.Vector3(Math.sin(time+site.rotOffset)*0.05, Math.cos(time)*0.05, 0);
+                    w1Center.add(drift.clone().multiplyScalar(p2)); w2Center.sub(drift.clone().multiplyScalar(p2));
+                }
+                
+                site.o1.position.copy(w1Center); site.o2.position.copy(w2Center);
+                site.o1.position.x += jitterX; site.o2.position.y += jitterY;
+
+                if (p2 === 0) {
+                    site.h1.position.lerpVectors(site.idleH1, site.dockH1, p1); site.h2.position.lerpVectors(site.idleH2, site.dockH2, p1);
+                    site.h3.position.lerpVectors(site.idleH3, site.dockH3, p1); site.h4.position.lerpVectors(site.idleH4, site.dockH4, p1);
+                } else {
+                    let rot1 = time * 0.5 + site.rotOffset;
+                    site.h1.position.set(w1Center.x + Math.cos(rot1)*0.02, w1Center.y + Math.sin(rot1)*0.015, w1Center.z);
+                    site.h2.position.set(w1Center.x + Math.cos(rot1+2)*0.02, w1Center.y + Math.sin(rot1+2)*0.015, w1Center.z);
+                    let rot2 = -time * 0.5 - site.rotOffset;
+                    site.h3.position.set(w2Center.x + Math.cos(rot2)*0.02, w2Center.y + Math.sin(rot2)*0.015, w2Center.z);
+                    site.h4.position.set(w2Center.x + Math.cos(rot2+2)*0.02, w2Center.y + Math.sin(rot2+2)*0.015, w2Center.z);
+                }
+
+                let currentSO4 = new THREE.Vector3();
+                if (p3 === 0) {
+                    currentSO4.lerpVectors(site.idleSO4, site.waitSO4, p1); 
+                    site.so4.rotation.set(time*0.5+site.rotOffset, time*0.5+site.rotOffset, 0);
+                } else {
+                    currentSO4.lerpVectors(site.waitSO4, site.dockSO4, p3);
+                    qIdle.setFromEuler(new THREE.Euler(time*0.5+site.rotOffset, time*0.5+site.rotOffset, 0));
+                    qDock.setFromEuler(eDockL);
+                    site.so4.quaternion.slerpQuaternions(qIdle, qDock, p3);
+                }
+                site.so4.position.copy(currentSO4);
+                site.so4.position.y += jitterY;
+            });
+
+            activeSitesNeg.forEach((site, i) => {
+                const orderIndex = site.layer * (ROWS * COLS) + (i % (ROWS * COLS));
+                const start = (orderIndex / NUM_SITES) * (1 - overlap);
+                const end = start + overlap;
+                let local_rp = Math.max(0, Math.min(1, (global_rp - start) / (end - start)));
+                
+                if (site.isDead) local_rp = 1.0; 
+
+                let p1 = Math.min(Math.max(local_rp / 0.3, 0), 1);
+                let p2 = Math.min(Math.max((local_rp - 0.3) / 0.3, 0), 1); 
+                let p3 = Math.min(Math.max((local_rp - 0.6) / 0.4, 0), 1);
+
+                let jitterX = Math.sin(time * 40 + i + 10) * thermalJitter;
+                let jitterY = Math.cos(time * 50 + i + 10) * thermalJitter;
+
+                site.pb.position.lerpVectors(site.pbOrig, site.pbDest, Math.max(p2, p3)); 
+                site.pb.position.x += jitterX; site.pb.position.y += jitterY;
+
+                if(site.isDead && site.pb.material !== deadMat) {
+                    site.pb.material = deadMat; 
+                    site.pb.scale.setScalar(0.06); 
+                    site.so4.children.forEach(c => { if(c.material) c.material = deadMat; });
+                }
+
+                let currentSO4 = new THREE.Vector3();
+                if (p3 === 0) {
+                    currentSO4.lerpVectors(site.idleSO4, site.waitSO4, Math.max(p1, p2)); 
+                    site.so4.rotation.set(time*0.5+site.rotOffset, time*0.5+site.rotOffset, 0);
+                } else {
+                    currentSO4.lerpVectors(site.waitSO4, site.dockSO4, p3);
+                    qIdle.setFromEuler(new THREE.Euler(time*0.5+site.rotOffset, time*0.5+site.rotOffset, 0));
+                    qDock.setFromEuler(eDockR);
+                    site.so4.quaternion.slerpQuaternions(qIdle, qDock, p3);
+                }
+                site.so4.position.copy(currentSO4);
+                site.so4.position.y += jitterY;
+            });
+
+            bgIons.forEach(ion => {
+                if(ion.type === 'so4') {
+                    ion.mesh.position.set(ion.pos.x + Math.sin(time+ion.offset)*0.05, ion.pos.y + Math.cos(time*0.8+ion.offset)*0.05, ion.pos.z + Math.sin(time*0.9+ion.offset)*0.05);
+                    ion.mesh.rotation.set(time*0.4, time*0.4, 0);
+                } else {
+                    ion.mesh.position.set(ion.pos.x + Math.sin(time*1.2+ion.offset)*0.06, ion.pos.y + Math.cos(time*1.1+ion.offset)*0.06, ion.pos.z + Math.sin(time*1.3+ion.offset)*0.06);
+                }
+            });
+
+            if (currentView === 'macro' && !isViewAnimating) {
+                raycaster.setFromCamera(mouse, camera);
+                let allMeshes = [];
+                [posGroup, negGroup, liqGroup].forEach(g => {
+                    g.children.forEach(c => allMeshes.push(c));
+                });
+                const intersects = raycaster.intersectObjects(allMeshes, false);
+                
+                if (intersects.length > 0 && intersects[0].object.userData.tooltip) {
+                    tooltip.innerHTML = intersects[0].object.userData.tooltip;
+                    tooltip.style.left = (mousePx.x + 15) + 'px';
+                    tooltip.style.top = (mousePx.y + 15) + 'px';
+                    tooltip.classList.add('visible');
+                } else {
+                    tooltip.classList.remove('visible');
+                }
+
+                // 拆解标签动态跟踪
+                const expVal = parseFloat(explodeSlider.value);
+                if (expVal > 0.05) {
+                    const wHalf = window.innerWidth / 2, hHalf = window.innerHeight / 2;
+                    const updateLabel = (id, obj, ox, oy, oz) => {
+                        const el = document.getElementById(id);
+                        if(el) {
+                            let vec = new THREE.Vector3(ox, oy, oz).applyMatrix4(obj.matrixWorld).project(camera);
+                            if (vec.z < 1) {
+                                el.style.left = `${(vec.x * wHalf) + wHalf}px`; el.style.top = `${-(vec.y * hHalf) + hHalf}px`;
+                                el.classList.add('visible');
+                            } else { el.classList.remove('visible'); }
+                        }
+                    };
+                    updateLabel('label-ex-pos', posGroup, 2.1, 2.5, 2.5);
+                    updateLabel('label-ex-neg', negGroup, -3.1, 2.5, -2.5);
+                    updateLabel('label-ex-liq', liqGroup, 0, 1.0, 3.5);
+                    updateLabel('label-ex-cas', casingGroup, 0, -3.5, 3.5);
+                } else {
+                    ['label-ex-pos', 'label-ex-neg', 'label-ex-liq', 'label-ex-cas'].forEach(id => {
+                        let el = document.getElementById(id);
+                        if(el) el.classList.remove('visible');
+                    });
+                }
+            } else {
+                tooltip.classList.remove('visible');
+                ['label-ex-pos', 'label-ex-neg', 'label-ex-liq', 'label-ex-cas'].forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) el.classList.remove('visible');
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        camera.position.set(12, 10, 15); controls.target.set(0, -1, 0);
+        applyAlphaRules();
+        switchView('macro');
+        animate();
+    </script>
+</body>
+</html>
