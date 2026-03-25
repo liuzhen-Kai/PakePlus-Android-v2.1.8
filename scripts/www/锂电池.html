@@ -151,6 +151,18 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .loading-text { color: #88c0d0; font-size: 0.85rem; font-weight: 500; letter-spacing: 1px; }
     </style>
+
+    <!-- 直接引入你刚才整理好的 js 文件夹里的 10 个核心文件，不用再管烦人的模块化了！ -->
+    <script src="./js/three.min.js"></script>
+    <script src="./js/OrbitControls.js"></script>
+    <script src="./js/tween.umd.js"></script>
+    <script src="./js/Pass.js"></script>
+    <script src="./js/EffectComposer.js"></script>
+    <script src="./js/RenderPass.js"></script>
+    <script src="./js/ShaderPass.js"></script>
+    <script src="./js/CopyShader.js"></script>
+    <script src="./js/LuminosityHighPassShader.js"></script>
+    <script src="./js/UnrealBloomPass.js"></script>
 </head>
 <body>
     <!-- 启动加载屏 -->
@@ -220,24 +232,7 @@
         </div>
     </div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/",
-                "@tweenjs/tween.js": "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@18.6.4/dist/tween.esm.js"
-            }
-        }
-    </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-        import * as TWEEN from '@tweenjs/tween.js';
-
+    <script>
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x5c6370); 
         scene.fog = new THREE.FogExp2(0x5c6370, 0.012);
@@ -252,13 +247,13 @@
         renderer.toneMapping = THREE.ACESFilmicToneMapping; 
         document.body.appendChild(renderer.domElement);
 
-        const renderScene = new RenderPass(scene, camera);
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.2, 0.6);
-        const composer = new EffectComposer(renderer);
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.2, 0.6);
+        const composer = new THREE.EffectComposer(renderer);
         composer.addPass(renderScene);
         composer.addPass(bloomPass);
 
-        const controls = new OrbitControls(camera, renderer.domElement);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true; controls.dampingFactor = 0.05;
         controls.maxPolarAngle = Math.PI / 2 + 0.1;
         
