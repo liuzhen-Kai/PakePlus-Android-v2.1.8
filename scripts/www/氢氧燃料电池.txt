@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>氢氧燃料电池 3D 演示</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #9ca3af; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #e2e8f0; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        .glass-panel {
+            position: absolute; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 100; transition: all 0.5s;
+        }
+
+        /* 左上角标题缩减 */
+        #ui-panel { top: 20px; left: 20px; padding: 10px 20px; width: auto;}
+        
+        /* 缩小遥测面板 */
+        #dashboard-panel { top: 20px; right: 20px; padding: 10px 15px; min-width: 160px; }
+        
+        /* 底部集成控制栏 */
+        #bottom-panel {
+            bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 15px 25px; width: 85%; max-width: 800px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+
+        h1 { margin: 0; font-size: 18px; color: #f8fafc; font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,0.5); letter-spacing: 1px; }
+        h3 { margin: 0 0 8px 0; font-size: 13px; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; text-transform: uppercase; letter-spacing: 1px;}
+        
+        .control-group { display: flex; flex-direction: column; gap: 5px; font-size: 13px;}
+        .control-group-header { display: flex; justify-content: space-between; align-items: center; }
+        input[type="range"] { cursor: pointer; width: 100%; accent-color: #38bdf8; margin: 0;}
+        
+        button {
+            padding: 8px 12px; cursor: pointer; border: 1px solid rgba(56, 189, 248, 0.5); background-color: rgba(56, 189, 248, 0.15);
+            color: #38bdf8; border-radius: 6px; font-weight: bold; transition: all 0.2s; font-size: 13px; flex: 1; text-align: center;
+        }
+        button:hover { background-color: rgba(56, 189, 248, 0.35); text-shadow: 0 0 8px rgba(56, 189, 248, 0.8); box-shadow: 0 0 10px rgba(56,189,248,0.3);}
+        button.cyber { color: #10b981; border-color: rgba(16, 185, 129, 0.5); background-color: rgba(16, 185, 129, 0.15); }
+        button.cyber:hover { background-color: rgba(16, 185, 129, 0.35); text-shadow: 0 0 8px rgba(16, 185, 129, 0.8);}
+        button.action-btn { color: #f8fafc; border-color: rgba(56, 189, 248, 0.8); background-color: rgba(56, 189, 248, 0.4); }
+        button.action-btn:hover { background-color: rgba(56, 189, 248, 0.6); }
+        button.action-btn.active { color: #fb7185; border-color: rgba(251, 113, 133, 0.8); background-color: rgba(251, 113, 133, 0.2); }
+        button.action-btn.active:hover { background-color: rgba(251, 113, 133, 0.4); }
+
+        .btn-row { display: flex; gap: 10px; width: 100%; justify-content: space-between; flex-wrap: wrap;}
+        .slider-row { display: flex; gap: 30px; width: 100%; }
+        .slider-wrapper { flex: 1; }
+
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #e2e8f0; align-items: center;}
+        .data-val { font-weight: bold; font-size: 15px; color: #38bdf8; text-shadow: 0 0 8px rgba(56, 189, 248, 0.6); }
+        .data-val.power { color: #fde047; text-shadow: 0 0 8px rgba(253, 224, 71, 0.6); font-size: 18px;}
+        .data-val.rpm { color: #10b981; text-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
+
+        .label {
+            background-color: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.2);
+            padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #f8fafc; pointer-events: none; white-space: nowrap; transition: opacity 0.4s ease-in-out;
+        }
+        .label.blue { border-left: 4px solid #3b82f6; }
+        .label.gray { border-left: 4px solid #94a3b8; }
+        .label.green { border-left: 4px solid #10b981; }
+        .label.red { border-left: 4px solid #ef4444; }
+        .label.yellow { border-left: 4px solid #eab308; }
+        .label.purple { border-left: 4px solid #a78bfa; font-size: 14px; padding: 6px 10px;}
+
+        #loading { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 20px; font-weight: bold; color: #f8fafc; z-index: 999; 
+            transition: opacity 0.5s ease-out; background: rgba(15,23,42,0.9); padding: 20px 40px; border-radius: 8px; border: 1px solid #38bdf8;
+            box-shadow: 0 0 20px rgba(56,189,248,0.5);
+        }
+
+        /* ========== 返回主页按钮样式 ========== */
+        .global-back-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 300;
+            pointer-events: auto;
+            font-family: inherit;
+        }
+        .global-back-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- ========== 返回主页按钮（左下角） ========== -->
+    <button id="back-to-home" class="global-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        返回知识图谱
+    </button>
+
+    <div id="loading">正在加载 3D 引擎与物理模型...</div>
+
+    <!-- 左上角极致精简标题 -->
+    <div id="ui-panel" class="glass-panel">
+        <h1>氢氧燃料电池</h1>
+    </div>
+
+    <!-- 右上角缩小版仪表盘 -->
+    <div id="dashboard-panel" class="glass-panel">
+        <h3>实时物理遥测</h3>
+        <div class="data-row"><span>电池电压</span><span id="val-voltage" class="data-val">0.00 V</span></div>
+        <div class="data-row"><span>负载电流</span><span id="val-current" class="data-val">0.00 A</span></div>
+        <div class="data-row" style="border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">
+            <span>输出功率</span><span id="val-power" class="data-val power">0.00 W</span>
+        </div>
+        <div class="data-row" style="background: rgba(16, 185, 129, 0.1); padding: 4px; border-radius: 4px; margin-top: 6px;">
+            <span style="color:#10b981;">电机转速</span><span id="val-rpm" class="data-val rpm">0 RPM</span>
+        </div>
+    </div>
+
+    <!-- 底部全集成控制台 -->
+    <div id="bottom-panel" class="glass-panel">
+        <!-- 按钮组 -->
+        <div class="btn-row">
+            <button id="cam-front">主视图</button>
+            <button id="cam-side">侧视图</button>
+            <button id="cam-drone">负载视图</button>
+            <button id="cam-micro" style="border-color: #a78bfa; color: #a78bfa; background: rgba(167, 139, 250, 0.15);">微观机理</button>
+            <button id="btn-cyber" class="cyber">透视</button>
+            <button id="toggleAnimationBtn" class="action-btn">▶️ 开始工作</button>
+        </div>
+        <!-- 滑块组 -->
+        <div class="slider-row">
+            <div class="slider-wrapper control-group">
+                <div class="control-group-header">
+                    <label><b>展开间距：</b></label>
+                    <span id="val-spacing" style="color:#38bdf8; font-weight:bold;">0.0</span>
+                </div>
+                <input type="range" id="explodeSlider" min="0" max="15" step="0.1" value="0">
+            </div>
+            <div class="slider-wrapper control-group">
+                <div class="control-group-header">
+                    <label><b>反应速率：</b></label>
+                    <span id="val-speed" style="color:#fde047; font-weight:bold;">1.0x</span>
+                </div>
+                <input type="range" id="speedSlider" min="0.1" max="4" step="0.1" value="1">
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ==========================================
+        // 核心状态与标签管理
+        // ==========================================
+        let isCyberpunk = false;
+        let isAnimating = false; // 初始静止
+        let speedMultiplier = 1.0, baseCurrent = 5.2;
+        let isCameraMoving = false, inMicroView = false; 
+        let targetCameraPos = new THREE.Vector3(14, 12, 45); 
+        let targetControlsCenter = new THREE.Vector3(0, 4, 0);
+        let clock = new THREE.Clock();
+        let microTime = 0; 
+
+        let curveWire1, curveWire2, meshWire1, meshWire2;
+        
+        const plateLabels = []; 
+        const microLabels = []; 
+        let lblCarbon, lblPt, lblNafion, reactionLabel;
+
+        function updateLabelsVisibility() {
+            plateLabels.forEach(label => {
+                label.element.style.opacity = inMicroView ? "0" : "1";
+            });
+            if (!inMicroView) {
+                microLabels.forEach(label => {
+                    label.element.style.opacity = "0";
+                });
+            }
+        }
+
+        // ==========================================
+        // 1. 初始化场景、摄像机与辉光特效
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x9ca3af);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.copy(targetCameraPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        container.appendChild(renderer.domElement);
+
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 1.0; bloomPass.strength = 1.8; bloomPass.radius = 0.5;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05; controls.target.copy(targetControlsCenter);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9); dirLight.position.set(15, 25, 20); dirLight.castShadow = true; scene.add(dirLight);
+
+        // ==========================================
+        // 2. 分子生成与极板材质
+        // ==========================================
+        function createBond(p1, p2) {
+            const geo = new THREE.CylinderGeometry(0.04, 0.04, p1.distanceTo(p2), 8);
+            const bond = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color: 0x888888, roughness: 0.5}));
+            bond.position.copy(p1.clone().lerp(p2, 0.5));
+            bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+            return bond;
+        }
+
+        function createMolecule(type) {
+            const group = new THREE.Group();
+            if (type === 'H2') {
+                const s1 = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.2}));
+                const s2 = s1.clone(); s1.position.x = -0.16; s2.position.x = 0.16;
+                group.add(s1, s2, createBond(s1.position, s2.position));
+            } else if (type === 'O2') {
+                const s1 = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), new THREE.MeshStandardMaterial({color: 0xef4444, roughness: 0.3}));
+                const s2 = s1.clone(); s1.position.x = -0.2; s2.position.x = 0.2;
+                const bond = createBond(s1.position, s2.position); bond.scale.set(1.5, 1, 1.5);
+                group.add(s1, s2, bond);
+            } else if (type === 'H2O') {
+                const o = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), new THREE.MeshStandardMaterial({color: 0xef4444, roughness: 0.3}));
+                const h1 = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.2}));
+                const h2 = h1.clone(); o.position.set(0, 0.1, 0); h1.position.set(-0.22, -0.12, 0); h2.position.set(0.22, -0.12, 0);
+                group.add(o, h1, h2, createBond(o.position, h1.position), createBond(o.position, h2.position));
+            } else if (type === 'H+') {
+                group.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), new THREE.MeshStandardMaterial({color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2.5, roughness: 0.1})));
+            } else if (type === 'e-') {
+                group.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshStandardMaterial({color: 0xfde047, emissive: 0xfde047, emissiveIntensity: 4.5})));
+            }
+            return group;
+        }
+
+        function createBipolarTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#a0a5a9'; ctx.fillRect(0, 0, 512, 512); ctx.strokeStyle = '#6c7278'; ctx.lineWidth = 18; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); let y = 40, dir = 1; ctx.moveTo(40, y);
+            while (y < 480) {
+                if (dir===1) { ctx.lineTo(470, y); ctx.arc(470, y+20, 20, 1.5*Math.PI, 0.5*Math.PI, false); y+=40; ctx.moveTo(470, y); } 
+                else { ctx.lineTo(40, y); ctx.arc(40, y+20, 20, 1.5*Math.PI, 0.5*Math.PI, true); y+=40; ctx.moveTo(40, y); } dir *= -1;
+            } ctx.stroke(); return new THREE.CanvasTexture(canvas);
+        }
+
+        function createMEATexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#87ceeb'; ctx.fillRect(0, 0, 512, 512); ctx.strokeStyle = '#1a56db'; ctx.lineWidth = 60; ctx.strokeRect(30, 30, 452, 452);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const matEndplate = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.3 }); 
+        const matBipolar = new THREE.MeshStandardMaterial({ map: createBipolarTexture(), roughness: 0.6, metalness: 0.2 });
+        const matMEA = new THREE.MeshStandardMaterial({ map: createMEATexture(), roughness: 0.8, transparent: true, opacity: 0.85 }); 
+        const cyberMatEndplate = new THREE.MeshBasicMaterial({ color: 0x1e3a8a, wireframe: true, transparent: true, opacity: 0.5 });
+        const cyberMatBipolar = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.8 });
+        const cyberMatMEA = new THREE.MeshBasicMaterial({ color: 0xf97316, wireframe: true, transparent: true, opacity: 0.9 }); 
+
+        function createLabel(text, className, position, isMicro = false) {
+            const div = document.createElement('div'); 
+            div.className = `label ${className}`; 
+            div.innerHTML = text;
+            const label = new CSS2DObject(div); 
+            label.position.copy(position); 
+            
+            if (isMicro) { div.style.opacity = "0"; microLabels.push(label); } 
+            else { plateLabels.push(label); }
+            return label;
+        }
+
+        // ==========================================
+        // 3. 组装电池主体
+        // ==========================================
+        const parts = []; const plateWidth = 10, plateHeight = 14;
+        const stackConfig = [
+            { id: 'endplate_A', type: 'endplate_R', name: '负极端板', baseZ: -1.402, dir: -2, depth: 1, mat: matEndplate, cyberMat: cyberMatEndplate, labelClass: 'gray' },
+            { id: 'bipolar_A', type: 'bipolar', name: '负极板', baseZ: -0.601, dir: -1, depth: 0.6, mat: matBipolar, cyberMat: cyberMatBipolar, labelClass: 'red' },
+            { id: 'mea', type: 'mea', name: '质子交换膜', baseZ: 0, dir: 0, depth: 0.6, mat: matMEA, cyberMat: cyberMatMEA, labelClass: 'blue' },
+            { id: 'bipolar_C', type: 'bipolar', name: '正极板', baseZ: 0.601, dir: 1, depth: 0.6, mat: matBipolar, cyberMat: cyberMatBipolar, labelClass: 'green' },
+            { id: 'endplate_C', type: 'endplate_L', name: '正极端板', baseZ: 1.402, dir: 2, depth: 1, mat: matEndplate, cyberMat: cyberMatEndplate, labelClass: 'gray' }
+        ];
+
+        const pipeMolecules = [];
+        stackConfig.forEach((cfg) => {
+            const group = new THREE.Group();
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(plateWidth, plateHeight, cfg.depth), cfg.mat);
+            mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+            
+            group.add(createLabel(cfg.name, cfg.labelClass, new THREE.Vector3(0, plateHeight/2 + 2.0, 0), false));
+
+            if (cfg.type === 'endplate_L') { createPipe(group, -plateWidth/2, plateHeight/4, -3, 'O2_in', true); createPipe(group, -plateWidth/2, -plateHeight/4, -3, 'H2O_out', false); } 
+            else if (cfg.type === 'endplate_R') { createPipe(group, plateWidth/2, plateHeight/4, 3, 'H2_in', true); createPipe(group, plateWidth/2, -plateHeight/4, 3, 'H2_out', false); }
+            group.userData = { baseZ: cfg.baseZ, explodeDir: cfg.dir, origMat: cfg.mat, cyberMat: cfg.cyberMat, mesh: mesh, id: cfg.id };
+            scene.add(group); parts.push(group);
+        });
+
+        function createPipe(parentGroup, x, y, length, type, isInput) {
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, Math.abs(length), 16), new THREE.MeshStandardMaterial({ color: 0x888888, transparent:true, opacity:0.5 }));
+            pipe.rotation.z = Math.PI / 2; pipe.position.set(x + length/2, y, 0); parentGroup.add(pipe);
+            let lText = '', lClass = '', mType = '';
+            if (type==='H2_in') {lText='H₂ 进气'; lClass='red'; mType='H2';} else if (type==='H2_out') {lText='未反应 H₂'; lClass='gray'; mType='H2';}
+            else if (type==='O2_in') {lText='O₂ 进气'; lClass='green'; mType='O2';} else if (type==='H2O_out') {lText='H₂O 产水'; lClass='blue'; mType='H2O';}
+            parentGroup.add(createLabel(lText, lClass, new THREE.Vector3(x+length+(length>0?1.5:-1.5), y+1.5, 0), false));
+            const sX = isInput ? (x+length) : x, eX = isInput ? x : (x+length), mDir = isInput ? (length>0?-1:1) : (length>0?1:-1);
+            for (let i=0; i<4; i++) {
+                const mol = createMolecule(mType); mol.position.set(x + Math.random()*length, y+(Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5);
+                parentGroup.add(mol); pipeMolecules.push({ mesh: mol, startX: sX, endX: eX, dirX: mDir, baseSpeed: 0.02 + Math.random()*0.02 });
+            }
+        }
+
+        // ==========================================
+        // 4. 高能涡轮电机 (用电器) 与 实体导线
+        // ==========================================
+        const motorGroup = new THREE.Group();
+        const motorY = 20; 
+        motorGroup.position.set(0, motorY, 0); 
+        
+        const casing = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 3.5, 32, 1, true), new THREE.MeshStandardMaterial({color: 0x1e293b, metalness: 0.8, roughness: 0.3, side: THREE.DoubleSide}));
+        casing.rotation.x = Math.PI / 2; 
+
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 4, 16), new THREE.MeshStandardMaterial({color: 0x0f172a, metalness: 0.9, roughness: 0.1}));
+        hub.rotation.x = Math.PI / 2;
+        const fanGroup = new THREE.Group(); fanGroup.add(hub);
+
+        const blades = []; const bladeMat = new THREE.MeshStandardMaterial({color: 0x0ea5e9, emissive: 0x0ea5e9, emissiveIntensity: 2.0, transparent: true, opacity: 0.85});
+        for(let i=0; i<10; i++) {
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.5, 0.8), bladeMat); blade.position.y = 2.4; blade.rotation.x = 0.4; 
+            const pivot = new THREE.Group(); pivot.rotation.z = (i / 10) * Math.PI * 2; pivot.add(blade); fanGroup.add(pivot); blades.push(bladeMat); 
+        }
+        
+        const terminalGeo = new THREE.CylinderGeometry(0.4, 0.4, 1, 16); const terminalMat = new THREE.MeshStandardMaterial({color: 0xfacc15, metalness: 0.9, roughness: 0.2}); 
+        const termNeg = new THREE.Mesh(terminalGeo, terminalMat); termNeg.rotation.z = Math.PI/2; termNeg.position.set(-4.5, 0, 0);
+        const termPos = new THREE.Mesh(terminalGeo, terminalMat); termPos.rotation.z = Math.PI/2; termPos.position.set(4.5, 0, 0);
+        motorGroup.add(casing, fanGroup, termNeg, termPos); 
+        motorGroup.add(createLabel('负载电机', 'yellow', new THREE.Vector3(0, 6, 0), false)); 
+        scene.add(motorGroup);
+
+        const wireMat = new THREE.MeshStandardMaterial({color: 0x111111, transparent: true, opacity: 0.35, roughness: 0.1, metalness: 0.9});
+        const termLeft = new THREE.Vector3(-5, motorY, 0); const termRight = new THREE.Vector3(5, motorY, 0);  
+
+        function updateWires(spacing) {
+            const anodeZ = parts[1].userData.baseZ + parts[1].userData.explodeDir * spacing;
+            const cathodeZ = parts[3].userData.baseZ + parts[3].userData.explodeDir * spacing;
+            const plateTopY = plateHeight / 2;
+
+            curveWire1 = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, plateTopY, anodeZ), new THREE.Vector3(-5, plateTopY + 4, anodeZ), termLeft);
+            curveWire2 = new THREE.QuadraticBezierCurve3(termRight, new THREE.Vector3(5, plateTopY + 4, cathodeZ), new THREE.Vector3(0, plateTopY, cathodeZ));
+
+            if(meshWire1) { meshWire1.geometry.dispose(); scene.remove(meshWire1); } if(meshWire2) { meshWire2.geometry.dispose(); scene.remove(meshWire2); }
+            meshWire1 = new THREE.Mesh(new THREE.TubeGeometry(curveWire1, 20, 0.25, 8, false), wireMat); meshWire2 = new THREE.Mesh(new THREE.TubeGeometry(curveWire2, 20, 0.25, 8, false), wireMat);
+            scene.add(meshWire1, meshWire2);
+        }
+
+        // ==========================================
+        // 5. 智能分布的微观结构与循序渐进的标签
+        // ==========================================
+        const microGroup = new THREE.Group(); 
+        microGroup.scale.set(0.35, 0.35, 0.35);
+        microGroup.position.set(-2, 1.5, 0.3); 
+        
+        const focusRing = new THREE.Mesh(new THREE.TorusGeometry(3.8, 0.1, 16, 64), new THREE.MeshBasicMaterial({color: 0x38bdf8, transparent: true, opacity: 0.6}));
+        focusRing.position.set(0, 0, -1.0); microGroup.add(focusRing);
+
+        const carbonSupport = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 1), new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.9, bumpScale: 0.2}));
+        carbonSupport.position.set(0, 0, -1.2); microGroup.add(carbonSupport); 
+        lblCarbon = createLabel('① 扩散层 (电子回流)', 'gray', new THREE.Vector3(-6.5, 3, -1.2), true);
+        microGroup.add(lblCarbon);
+
+        const ptNanoparticle = new THREE.Group(); 
+        const ptMat = new THREE.MeshStandardMaterial({color: 0xe2e8f0, roughness: 0.3, metalness: 0.8});
+        [[0,0,-0.6], [0.8,0.5,-0.6], [-0.7,-0.4,-0.6], [0.5,-0.8,-0.6], [-0.5,0.7,-0.6]].forEach(pos => { 
+            const atom = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), ptMat); atom.position.set(...pos); ptNanoparticle.add(atom); 
+        });
+        microGroup.add(ptNanoparticle); 
+        lblPt = createLabel('② 铂催化层 (氧化反应)', 'red', new THREE.Vector3(0, 5, -0.6), true);
+        microGroup.add(lblPt);
+
+        const nafionBlob = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 32), new THREE.MeshStandardMaterial({color: 0x3b82f6, transparent: true, opacity: 0.4, roughness: 0.1, depthWrite: false}));
+        nafionBlob.scale.set(1, 1.2, 0.5); nafionBlob.position.set(0, 0, 0.5); microGroup.add(nafionBlob); 
+        lblNafion = createLabel('③ 质子交换膜 (吸收H⁺)', 'blue', new THREE.Vector3(6.5, 3, 1.0), true);
+        microGroup.add(lblNafion);
+
+        const microH2 = createMolecule('H2'); 
+        const microH_ads1 = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.2})); const microH_ads2 = microH_ads1.clone();
+        const microHPlus1 = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshStandardMaterial({color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2.5})); const microHPlus2 = microHPlus1.clone();
+        const microE1 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({color: 0xfde047, emissive: 0xfde047, emissiveIntensity: 3.5})); const microE2 = microE1.clone();
+        microGroup.add(microH2, microH_ads1, microH_ads2, microHPlus1, microHPlus2, microE1, microE2);
+        
+        reactionLabel = createLabel('系统未运行', 'purple', new THREE.Vector3(0, -5.5, -1), true); 
+        microGroup.add(reactionLabel);
+
+        parts[1].add(microGroup);
+
+        // ==========================================
+        // 6. 宏观电池粒子流 
+        // ==========================================
+        const migratingParticles = [];
+        function addMigrationStream(type, startIdx, endIdx, count) {
+            for(let i=0; i<count; i++) {
+                const mol = createMolecule(type); scene.add(mol); 
+                migratingParticles.push({ mesh: mol, type: type, startIdx: startIdx, endIdx: endIdx, progress: Math.random(), baseSpeed: 0.0015+Math.random()*0.002, offsetX: (Math.random()-0.5)*8, offsetY: (Math.random()-0.5)*12 });
+            }
+        }
+        addMigrationStream('H2', 0, 1, 20); addMigrationStream('O2', 4, 3, 20); addMigrationStream('H2O', 3, 4, 25);
+        for(let i=0; i<45; i++) { const h = createMolecule('H+'); scene.add(h); migratingParticles.push({ mesh: h, type: 'H+跨膜', progress: Math.random(), baseSpeed: 0.0025+Math.random()*0.0025, offsetX: (Math.random()-0.5)*8, offsetY: (Math.random()-0.5)*12 }); }
+        for(let i=0; i<25; i++) { const e = createMolecule('e-'); scene.add(e); migratingParticles.push({ mesh: e, type: '电子', progress: Math.random(), baseSpeed: 0.003+Math.random()*0.002 }); }
+
+        // ==========================================
+        // 7. 交互与控制逻辑 (修复与清理)
+        // ==========================================
+        const DOM = {
+            explode: document.getElementById('explodeSlider'), speed: document.getElementById('speedSlider'),
+            valSpacing: document.getElementById('val-spacing'), valSpeed: document.getElementById('val-speed'),
+            valVolt: document.getElementById('val-voltage'), valCurr: document.getElementById('val-current'),
+            valPower: document.getElementById('val-power'), valRpm: document.getElementById('val-rpm'),
+            toggleBtn: document.getElementById('toggleAnimationBtn')
+        };
+
+        const setCam = (pos, target, microMode = false) => { 
+            targetCameraPos.copy(pos); targetControlsCenter.copy(target); isCameraMoving = true; 
+            inMicroView = microMode; 
+            updateLabelsVisibility(); 
+        };
+        
+        // 删除了引发错误的 cam-top
+        document.getElementById('cam-front').onclick = () => setCam(new THREE.Vector3(14, 12, 45), new THREE.Vector3(0,4,0), false);
+        document.getElementById('cam-side').onclick = () => setCam(new THREE.Vector3(60, 0, 0), new THREE.Vector3(0,0,0), false);
+        document.getElementById('cam-drone').onclick = () => setCam(new THREE.Vector3(10, 25, 15), new THREE.Vector3(0,20,0), false); 
+        
+        document.getElementById('cam-micro').onclick = () => { 
+            if (parseFloat(DOM.explode.value) < 4) { DOM.explode.value = 6; DOM.explode.dispatchEvent(new Event('input')); }
+            setCam(new THREE.Vector3(-4, 2.5, -4.0), new THREE.Vector3(-2, 1.5, -6.3), true); 
+            microTime = 0; 
+        };
+
+        DOM.toggleBtn.onclick = () => {
+            isAnimating = !isAnimating;
+            if (isAnimating) {
+                DOM.toggleBtn.innerHTML = '⏸ 暂停工作';
+                DOM.toggleBtn.classList.add('active');
+            } else {
+                DOM.toggleBtn.innerHTML = '▶️ 开始工作';
+                DOM.toggleBtn.classList.remove('active');
+            }
+        };
+
+        DOM.explode.oninput = () => {
+            const spacing = parseFloat(DOM.explode.value);
+            DOM.valSpacing.innerText = spacing.toFixed(1);
+            parts.forEach(p => p.position.z = p.userData.baseZ + p.userData.explodeDir * spacing);
+            updateWires(spacing);
+        };
+        DOM.speed.oninput = () => { speedMultiplier = parseFloat(DOM.speed.value); DOM.valSpeed.innerText = speedMultiplier.toFixed(1) + 'x'; };
+
+        document.getElementById('btn-cyber').onclick = () => {
+            isCyberpunk = !isCyberpunk; scene.background = new THREE.Color(isCyberpunk ? 0x020617 : 0x9ca3af); 
+            parts.forEach(p => p.userData.mesh.material = isCyberpunk ? p.userData.cyberMat : p.userData.origMat);
+            document.getElementById('btn-cyber').classList.toggle('active', isCyberpunk);
+        };
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 移除加载遮罩
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+            setTimeout(() => { loadingEl.style.opacity = '0'; setTimeout(() => loadingEl.remove(), 500); }, 800);
+        }
+        
+        updateWires(0);
+
+        // ==========================================
+        // 8. 核心渲染循环
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            // 目标电流随开关而定
+            let targetCurrent = isAnimating ? (speedMultiplier * baseCurrent) : 0;
+            let actualCurrent = targetCurrent > 0 ? targetCurrent + (Math.random()*0.1 - 0.05) : 0;
+            
+            let actualVoltage = actualCurrent > 0 ? (1.23 - 0.08 * actualCurrent + (Math.random()*0.005)) : 0;
+            if(actualVoltage < 0) actualVoltage = 0;
+            let actualPower = actualVoltage * actualCurrent; 
+            let targetRpm = actualPower * 400; 
+
+            DOM.valCurr.textContent = actualCurrent.toFixed(2) + ' A'; DOM.valVolt.textContent = actualVoltage.toFixed(2) + ' V';
+            DOM.valPower.textContent = actualPower.toFixed(2) + ' W'; DOM.valRpm.textContent = Math.floor(targetRpm) + ' RPM';
+            bladeMat.emissiveIntensity = actualPower > 0 ? (1.0 + actualPower * 0.3) : 0; 
+
+            if (isCameraMoving) {
+                camera.position.lerp(targetCameraPos, 0.05); controls.target.lerp(targetControlsCenter, 0.08);
+                if (camera.position.distanceTo(targetCameraPos) < 0.2) isCameraMoving = false; 
+            }
+
+            fanGroup.rotation.z += (targetRpm * 0.0005) + (actualPower > 0 ? 0.02 : 0); 
+
+            if (isAnimating) {
+                pipeMolecules.forEach(p => {
+                    p.mesh.position.x += p.dirX * p.baseSpeed * speedMultiplier; p.mesh.rotation.x += 0.05 * speedMultiplier; p.mesh.rotation.y += 0.05 * speedMultiplier;
+                    if (p.dirX > 0 && p.mesh.position.x > Math.max(p.startX, p.endX)) { p.mesh.position.x = Math.min(p.startX, p.endX); } else if (p.dirX < 0 && p.mesh.position.x < Math.min(p.startX, p.endX)) { p.mesh.position.x = Math.max(p.startX, p.endX); }
+                });
+
+                migratingParticles.forEach(p => {
+                    p.progress += p.baseSpeed * speedMultiplier;
+                    if (p.progress > 1.0) { p.progress = 0; p.offsetX = (Math.random()-0.5)*8; p.offsetY = (Math.random()-0.5)*12; }
+                    
+                    let tz=0, tx=p.offsetX, ty=p.offsetY;
+                    
+                    if (p.type === 'H+跨膜') {
+                        const z1 = parts[1].position.z, z2 = parts[2].position.z, z3 = parts[3].position.z;
+                        if (p.progress < 0.5) tz = z1 + (z2 - z1) * (p.progress*2); else tz = z2 + (z3 - z2) * ((p.progress-0.5)*2);
+                    } else if (p.type === '电子') {
+                        if (p.progress < 0.45) {
+                            const t = p.progress / 0.45; const pos = curveWire1.getPoint(t); tx = pos.x; ty = pos.y; tz = pos.z;
+                        } else if (p.progress < 0.55) {
+                            const t = (p.progress - 0.45) / 0.1; tx = termLeft.x + (termRight.x - termLeft.x) * t; ty = motorY; tz = 0;
+                        } else {
+                            const t = (p.progress - 0.55) / 0.45; const pos = curveWire2.getPoint(t); tx = pos.x; ty = pos.y; tz = pos.z;
+                        }
+                        tx += (Math.random()-0.5)*0.1; ty += (Math.random()-0.5)*0.1; tz += (Math.random()-0.5)*0.1;
+                    } else { 
+                        tz = parts[p.startIdx].position.z + (parts[p.endIdx].position.z - parts[p.startIdx].position.z) * p.progress; 
+                    }
+
+                    if (p.type !== '电子') { 
+                        p.offsetX += (Math.random()-0.5)*0.06*speedMultiplier; p.offsetY += (Math.random()-0.5)*0.06*speedMultiplier;
+                        if (p.offsetX > 4.5) p.offsetX = 4.5; if (p.offsetX < -4.5) p.offsetX = -4.5; if (p.offsetY > 6.5) p.offsetY = 6.5; if (p.offsetY < -6.5) p.offsetY = -6.5;
+                        tx = p.offsetX; ty = p.offsetY;
+                    } 
+                    p.mesh.position.set(tx, ty, tz);
+                    if (p.type !== 'H+跨膜' && p.type !== '电子') { p.mesh.rotation.x += 0.05*speedMultiplier; p.mesh.rotation.y += 0.05*speedMultiplier; }
+                });
+            }
+
+            // ⭐ 幻灯片式分布高亮解说 (微观视角)
+            if (inMicroView) {
+                if(isAnimating) {
+                    microTime += delta * speedMultiplier * 0.8; 
+                    const cycle = microTime % 4.0; 
+                    const ptTargetZ = -0.8; 
+                    
+                    reactionLabel.element.style.opacity = "1";
+
+                    if (cycle < 1.0) {
+                        reactionLabel.element.innerHTML = '步骤 1: H₂ 抵达负极<br><span style="color:#fbbf24">H₂(g) → 穿透碳纸进入催化层</span>';
+                        lblCarbon.element.style.opacity = "1"; lblPt.element.style.opacity = "0.2"; lblNafion.element.style.opacity = "0.2";
+                        
+                        microH2.visible = true; microH_ads1.visible = false; microH_ads2.visible = false;
+                        microHPlus1.visible = false; microHPlus2.visible = false; microE1.visible = false; microE2.visible = false;
+                        microH2.position.set(0, 0, -6 + cycle * 5.2); microH2.rotation.z = cycle * Math.PI; 
+                    } else if (cycle < 2.0) {
+                        reactionLabel.element.innerHTML = '步骤 2: 负极解离吸附<br><span style="color:#fbbf24">H₂ + 2Pt ⇌ 2Pt-H</span>';
+                        lblCarbon.element.style.opacity = "0.2"; lblPt.element.style.opacity = "1"; lblNafion.element.style.opacity = "0.2";
+                        
+                        microH2.visible = false; microH_ads1.visible = true; microH_ads2.visible = true; 
+                        const t = cycle - 1.0; 
+                        microH_ads1.position.set(-0.4 - t*0.5, 0.2 + t*0.2, ptTargetZ); microH_ads2.position.set(0.4 + t*0.5, -0.2 - t*0.2, ptTargetZ);
+                    } else if (cycle < 2.5) {
+                        reactionLabel.element.innerHTML = '步骤 3: 负极氧化反应 (核心)<br><span style="color:#ef4444">Pt-H ⇌ Pt + H⁺ + e⁻ (失去电子)</span>';
+                        lblCarbon.element.style.opacity = "0.2"; lblPt.element.style.opacity = "1"; lblNafion.element.style.opacity = "0.2";
+
+                        microH_ads1.visible = false; microH_ads2.visible = false;
+                        microHPlus1.visible = true; microHPlus2.visible = true; microE1.visible = true; microE2.visible = true;
+                        
+                        microHPlus1.position.set(-0.9, 0.4, ptTargetZ); microHPlus2.position.set(0.9, -0.4, ptTargetZ);
+                        microE1.position.set(-0.9, 0.4, ptTargetZ - 0.2); microE2.position.set(0.9, -0.4, ptTargetZ - 0.2);
+                    } else {
+                        reactionLabel.element.innerHTML = '步骤 4: 粒子分流<br><span style="color:#fbbf24">e⁻ 退回扩散层 / H⁺ 跨入交换膜</span>';
+                        lblCarbon.element.style.opacity = "1"; lblPt.element.style.opacity = "0.2"; lblNafion.element.style.opacity = "1";
+
+                        const flyT = cycle - 2.5; 
+                        microE1.position.z = (ptTargetZ - 0.2) - flyT * 1; microE1.position.y = 0.4 + flyT * 4;
+                        microE2.position.z = (ptTargetZ - 0.2) - flyT * 1; microE2.position.y = -0.4 + flyT * 4;
+                        microHPlus1.position.z = ptTargetZ + flyT * 3; microHPlus2.position.z = ptTargetZ + flyT * 3;
+                    }
+                } else {
+                    reactionLabel.element.innerHTML = '系统未运行<br><span style="color:#94a3b8">点击下方“开始工作”触发反应</span>';
+                    lblCarbon.element.style.opacity = "0.2"; lblPt.element.style.opacity = "0.2"; lblNafion.element.style.opacity = "0.2";
+                }
+            }
+
+            controls.update(); composer.render(); labelRenderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+
+    <script>
+        // ========== 返回主页函数（独立于模块） ==========
+        function goBackHome() {
+            let currentPath = window.location.pathname;
+            let baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            let targetUrl = baseDir + 'index.html';
+            let debugDiv = document.createElement('div');
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.bottom = '100px';
+            debugDiv.style.left = '10px';
+            debugDiv.style.background = 'rgba(0,0,0,0.7)';
+            debugDiv.style.color = 'white';
+            debugDiv.style.padding = '8px';
+            debugDiv.style.borderRadius = '8px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.innerText = '返回主页: ' + targetUrl;
+            document.body.appendChild(debugDiv);
+            setTimeout(() => debugDiv.remove(), 1500);
+            window.location.href = targetUrl;
+        }
+
+        document.getElementById('back-to-home').addEventListener('click', goBackHome);
+    </script>
+</body>
+</html>
