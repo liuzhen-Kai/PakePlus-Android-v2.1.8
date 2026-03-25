@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>锌锰干电池全景教学系统</title>
+    <style>
+        body {
+            margin: 0; overflow: hidden;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #05050a 100%);
+            font-family: 'Microsoft YaHei', sans-serif;
+            color: white; user-select: none;
+        }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* 顶部信息 */
+        #header-panel {
+            position: absolute; top: 20px; left: 20px; z-index: 20;
+            background: rgba(15, 20, 35, 0.85); backdrop-filter: blur(10px);
+            padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(0, 240, 255, 0.3);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            transition: opacity 0.3s;
+        }
+        #title { font-size: 20px; font-weight: bold; color: #00f0ff; margin-bottom: 0; text-shadow: 0 0 10px rgba(0,240,255,0.4); }
+        
+        /* 极简版左下角图例 (Legend) */
+        #legend-panel {
+            position: absolute; bottom: 20px; left: 20px; z-index: 20;
+            background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(10px);
+            padding: 12px 15px; border-radius: 8px; border: 1px solid #475569;
+            display: flex; flex-direction: column; gap: 6px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: opacity 0.3s;
+        }
+        .legend-title { font-size: 13px; font-weight: bold; color: #8892b0; margin-bottom: 2px; border-bottom: 1px solid #475569; padding-bottom: 4px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: bold; color: #fff; font-family: monospace;}
+        .legend-color { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 4px rgba(255,255,255,0.1); }
+
+        /* 标签与引线系统 */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; transition: opacity 0.3s; }
+        .guide-line { stroke: #00f0ff; stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.6; }
+        .label {
+            position: absolute; background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(4px);
+            border: 1px solid #00f0ff; padding: 12px 15px; border-radius: 8px;
+            font-size: 13px; color: #e2e8f0; transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2); pointer-events: auto; white-space: nowrap; transition: opacity 0.3s;
+        }
+        .label-micro { border-color: #ff0055; box-shadow: 0 0 15px rgba(255, 0, 85, 0.2); }
+        .label-title { display: block; font-size: 15px; font-weight: bold; margin-bottom: 4px; color: #fff; }
+        .label-desc { font-size: 12px; color: #a8b2d1; margin-bottom: 8px; display: block;}
+        .micro-title { color: #ff0055 !important; }
+        .btn-zoom {
+            background: rgba(255, 0, 85, 0.2); border: 1px solid #ff0055; color: #ff0055;
+            padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 5px; width: 100%; justify-content: center;
+        }
+        .btn-zoom:hover { background: #ff0055; color: white; box-shadow: 0 0 10px rgba(255,0,85,0.5); }
+
+        /* 底部控制仪表盘 */
+        #dashboard {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 20; background: rgba(15, 20, 35, 0.9); backdrop-filter: blur(10px);
+            padding: 12px 25px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+            display: flex; flex-direction: row; align-items: center; gap: 20px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8); transition: opacity 0.3s;
+            width: max-content; max-width: 95vw; flex-wrap: wrap; justify-content: center;
+        }
+        .dashboard-controls { display: flex; gap: 12px; align-items: center; }
+        .dashboard-power { display: flex; align-items: center; gap: 12px; justify-content: center; }
+        .divider { width: 2px; height: 24px; background: rgba(255,255,255,0.2); border-radius: 1px; }
+        
+        .view-btn {
+            background: rgba(0, 0, 0, 0.3); color: #8892b0; border: 1px solid #475569;
+            padding: 10px 20px; font-size: 14px; font-weight: bold;
+            border-radius: 8px; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .view-btn:hover { color: #fff; border-color: #8892b0; }
+        .view-btn.active { background: rgba(0, 240, 255, 0.15); color: #00f0ff; border-color: #00f0ff; box-shadow: 0 0 10px rgba(0,240,255,0.2); }
+        .btn-explode { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-color: #f59e0b; }
+        .btn-explode:hover { background: #f59e0b; color: white; }
+
+        .action-btn {
+            border: none; color: white; padding: 10px 24px; font-size: 14px; font-weight: bold; 
+            border-radius: 8px; cursor: pointer; transition: all 0.2s; min-width: 120px; white-space: nowrap;
+        }
+        .btn-drive { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); }
+        .btn-drive:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(59, 130, 246, 0.6); }
+        .btn-remove { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4); }
+        .btn-remove:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(239, 68, 68, 0.6); }
+        .btn-replace { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4); animation: pulse 1.5s infinite; }
+        
+        .power-bar-bg { width: 180px; height: 10px; background: #2a2a35; border-radius: 5px; overflow: hidden; position: relative; }
+        .power-bar-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff0055, #f59e0b, #10b981); transform-origin: left; transition: transform 0.1s linear; }
+        .power-text { font-size: 16px; font-weight: bold; font-family: monospace; color: #10b981; text-shadow: 0 0 8px rgba(16, 185, 129, 0.5); width: 45px;}
+
+        /* 分子机理演播室 UI */
+        #mechanism-overlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 30; pointer-events: none; display: none; flex-direction: column;
+            justify-content: space-between; padding: 40px; box-sizing: border-box;
+            background: radial-gradient(circle at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0.85) 100%);
+        }
+        .mech-header { text-align: center; pointer-events: auto; }
+        .mech-title { font-size: 32px; font-weight: bold; color: #ff0055; text-shadow: 0 0 20px rgba(255,0,85,0.6); margin-bottom: 10px; }
+        .mech-equation { font-size: 26px; color: #fff; font-family: monospace; letter-spacing: 1px; background: rgba(0,0,0,0.5); padding: 15px 25px; border-radius: 12px; border: 1px solid #475569; display: inline-block; }
+        .eq-item { display: inline-block; padding: 2px 8px; border-radius: 6px; cursor: pointer; transition: all 0.3s ease; border: 1px solid transparent; }
+        .eq-item:hover { background: rgba(0, 240, 255, 0.2); color: #00f0ff; border-color: #00f0ff; transform: scale(1.1); box-shadow: 0 0 15px rgba(0,240,255,0.4); }
+        .mech-note { margin-top: 15px; font-size: 14px; color: #00f0ff; font-weight: normal; line-height: 1.5; background: rgba(0, 240, 255, 0.1); padding: 10px 15px; border-radius: 8px; display: inline-block; text-align: left;}
+        .btn-return {
+            background: rgba(255,255,255,0.1); border: 1px solid #fff; color: white;
+            padding: 10px 30px; border-radius: 20px; font-size: 16px; cursor: pointer; transition: all 0.2s; pointer-events: auto;
+            align-self: center; margin-bottom: 20px;
+        }
+        .btn-return:hover { background: #fff; color: #000; }
+        .mech-labels { display: flex; justify-content: space-between; width: 70%; align-self: center; font-size: 20px; font-weight: bold; color: #00f0ff; margin-top: auto; margin-bottom: 80px;}
+
+        /* 导览按钮与字幕 UI */
+        #btn-tour {
+            position: absolute; top: 20px; right: 20px; z-index: 40;
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9); border: none; color: white;
+            padding: 10px 20px; border-radius: 12px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(139, 92, 246, 0.5); transition: all 0.3s;
+        }
+        #btn-tour:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(139, 92, 246, 0.7); }
+        
+        #tour-subtitle {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 40;
+            background: rgba(10, 15, 30, 0.85); border: 1px solid rgba(0, 240, 255, 0.3); color: #fff;
+            padding: 8px 18px; border-radius: 8px; font-size: 14px; text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); max-width: 85%; pointer-events: none;
+            display: none; letter-spacing: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+
+        @media (max-width: 900px) {
+            .divider { display: none; }
+            #dashboard { flex-direction: column; }
+        }
+
+        /* ========== 返回主页按钮样式 ========== */
+        .global-back-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 300;
+            pointer-events: auto;
+            font-family: inherit;
+        }
+        .global-back-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+
+    <!-- ========== 返回主页按钮（左下角） ========== -->
+    <button id="back-to-home" class="global-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        返回知识图谱
+    </button>
+
+    <div id="header-panel"><div id="title">锌锰干电池</div></div>
+    
+    <button id="btn-tour" onclick="toggleTour()">▶️ 播放智能导览</button>
+    <div id="tour-subtitle"></div>
+
+    <div id="legend-panel">
+        <div class="legend-title">反应物</div>
+        <div class="legend-item"><div class="legend-color" style="background:#94a3b8;"></div> Zn</div>
+        <div class="legend-item"><div class="legend-color" style="background:#8b4513;"></div> MnO₂</div>
+        <div class="legend-item"><div class="legend-color" style="background:#3b82f6;"></div> NH₄⁺</div>
+        <div style="height: 1px; background: #475569; margin: 2px 0;"></div>
+        <div class="legend-title">生成物</div>
+        <div class="legend-item"><div class="legend-color" style="background:#94a3b8; transform:scale(0.7);"></div> Zn²⁺</div>
+        <div class="legend-item"><div class="legend-color" style="background:#8b4513;"></div> MnOOH</div>
+        <div class="legend-item"><div class="legend-color" style="background:#3b82f6;"></div> NH₃</div>
+    </div>
+
+    <!-- 集成式底部面板 -->
+    <div id="dashboard">
+        <div class="dashboard-controls">
+            <button id="btn-micro" class="view-btn active" onclick="toggleView('micro')">🔬 微观结构</button>
+            <button id="btn-macro" class="view-btn" onclick="toggleView('macro')">🔋 宏观结构</button>
+            <!-- 移除 display:none，让爆炸图按钮常驻 -->
+            <button id="btn-explode" class="view-btn btn-explode" onclick="toggleExplode()">💥 拆解透视</button>
+            <button id="btn-action" class="action-btn btn-drive" onclick="toggleDrive()">📥 装入电池</button>
+            <button id="btn-replace" class="action-btn btn-replace" onclick="replaceBattery()" style="display: none;">🔄 换新电池</button>
+        </div>
+        <div class="divider"></div>
+        <div class="dashboard-power">
+            <span style="font-size: 13px; color: #8892b0; font-weight: bold;">剩余电量</span>
+            <div class="power-bar-bg"><div id="power-fill" class="power-bar-fill"></div></div>
+            <span id="power-percent" class="power-text">100%</span>
+        </div>
+    </div>
+
+    <div id="mechanism-overlay">
+        <div class="mech-header">
+            <div id="mech-title" class="mech-title">正极反应机理分析</div>
+            <div id="eq-cathode" class="mech-equation" style="display:none;">
+                <span class="eq-item" onmouseenter="highlightMol('mno2')" onmouseleave="resetMol()">MnO₂</span> + 
+                <span class="eq-item" onmouseenter="highlightMol('nh4')" onmouseleave="resetMol()">NH₄⁺</span> + 
+                <span class="eq-item" onmouseenter="highlightMol('e_cath')" onmouseleave="resetMol()">e⁻</span> = 
+                <span class="eq-item" onmouseenter="highlightMol('mnooh')" onmouseleave="resetMol()">MnOOH</span> + 
+                <span class="eq-item" onmouseenter="highlightMol('nh3')" onmouseleave="resetMol()">NH₃</span>
+            </div>
+            <div id="eq-anode" class="mech-equation" style="display:none;">
+                <span class="eq-item" onmouseenter="highlightMol('zn')" onmouseleave="resetMol()">Zn</span> - 
+                <span class="eq-item" onmouseenter="highlightMol('e_anod')" onmouseleave="resetMol()">2e⁻</span> = 
+                <span class="eq-item" onmouseenter="highlightMol('zn2')" onmouseleave="resetMol()">Zn²⁺</span>
+            </div>
+            <br>
+            <div id="mech-note" class="mech-note">
+                💡 <b>互动式科学模型：</b><br>
+                1. <b>鼠标悬停</b> 上方的化学式，即可高亮对应3D分子结构！<br>
+                2. 锌(Zn)、二氧化锰(MnO₂)采用无实体键的<b>「空间充填模型」</b>。<br>
+                3. 氨气(NH₃)与铵根(NH₄⁺)采用带化学键的<b>「球棍模型」</b>。<br>
+            </div>
+        </div>
+        <div class="mech-labels">
+            <div>反应物 (Reactants)</div>
+            <div style="font-size: 30px;">=</div>
+            <div>生成物 (Products)</div>
+        </div>
+        <button class="btn-return" onclick="exitMechanism()">↩ 返回全景沙盘</button>
+    </div>
+
+    <div id="canvas-container"></div>
+    <div id="ui-layer">
+        <svg id="svg-layer" style="width: 100%; height: 100%; position: absolute; top:0; left:0;"></svg>
+        <div id="labels-container"></div>
+    </div>
+
+    <script>
+        // --- 全局状态 ---
+        let viewMode = 'micro';      
+        let isDriving = false;       
+        let batteryPower = 100;      
+        let wheelSpeed = 0;          
+        let mechMode = null; 
+        let isTouring = false; 
+        let isExploded = false; 
+        
+        let transitionPhase = 0;
+        let targetCamPos = new THREE.Vector3();
+        let targetCtrlPos = new THREE.Vector3();
+
+        const camPosDef = new THREE.Vector3(20, 15, 25);
+        const camTargetDef = new THREE.Vector3(0, 3, 2);
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0f0f1a, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.copy(camPosDef);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05;
+        controls.maxDistance = 100; controls.minDistance = 2;
+        controls.target.copy(camTargetDef); 
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const spotLight = new THREE.SpotLight(0xffffff, 1.5);
+        spotLight.position.set(20, 50, 20); spotLight.castShadow = true;
+        scene.add(spotLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1.0, 100);
+        pointLight.position.set(-20, 20, -20);
+        scene.add(pointLight);
+
+        // 地面网格 (y=0)
+        const gridHelper = new THREE.GridHelper(100, 50, 0x00f0ff, 0x222244);
+        gridHelper.position.y = 0; 
+        gridHelper.material.opacity = 0.3; gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // --- PBR 材质 ---
+        const PBR_MATS = {
+            Zn: new THREE.MeshPhysicalMaterial({color: 0x94a3b8, metalness: 0.3, roughness: 0.7, clearcoat: 0.2}), 
+            Mn: new THREE.MeshPhysicalMaterial({color: 0x8b4513, metalness: 0.4, roughness: 0.5, clearcoat: 0.3}),
+            N:  new THREE.MeshPhysicalMaterial({color: 0x3b82f6, metalness: 0.1, roughness: 0.2, clearcoat: 0.8}), 
+            O:  new THREE.MeshPhysicalMaterial({color: 0xef4444, metalness: 0.1, roughness: 0.2, clearcoat: 0.8}),
+            H:  new THREE.MeshPhysicalMaterial({color: 0xffffff, metalness: 0.0, roughness: 0.1, clearcoat: 1.0}),
+            E:  new THREE.MeshStandardMaterial({color: 0xffff00, emissive: 0xffaa00, emissiveIntensity: 1}),
+            Bond: new THREE.MeshStandardMaterial({color: 0xaaaaaa, metalness: 0.5, roughness: 0.5})
+        };
+
+        // --- 构建电池结构 ---
+        const batteryGroup = new THREE.Group(); scene.add(batteryGroup);
+        const height = 10;
+        const macroGroup = new THREE.Group(); batteryGroup.add(macroGroup);
+        const macroParts = {}; 
+
+        function createMacroWedge(innerR, outerR, height, color, opacity=1, isMetal=false) {
+            const shape = new THREE.Shape();
+            shape.moveTo(outerR, 0); shape.absarc(0, 0, outerR, 0, Math.PI*1.5, false);
+            shape.lineTo(innerR * Math.cos(Math.PI*1.5), innerR * Math.sin(Math.PI*1.5));
+            shape.absarc(0, 0, innerR, Math.PI*1.5, 0, true); shape.lineTo(outerR, 0);
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, curveSegments: 64 });
+            geo.computeBoundingBox(); geo.translate(0, 0, -0.5 * height); geo.rotateX(-Math.PI / 2);
+            const mat = new THREE.MeshPhysicalMaterial({
+                color: color, transparent: true, opacity: opacity, side: THREE.DoubleSide,
+                roughness: isMetal ? 0.2 : 0.6, metalness: isMetal ? 0.9 : 0.1, clearcoat: 0.5
+            });
+            const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; return mesh;
+        }
+
+        macroParts.cap = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.4, 32), new THREE.MeshStandardMaterial({color: 0xd4af37, metalness: 0.9}));
+        macroParts.cap.position.y = height/2 + 0.7; 
+        macroParts.carbon = createMacroWedge(0.001, 0.8, height+1, 0x111111); 
+        macroParts.mno2 = createMacroWedge(0.8, 1.8, height-0.4, 0x2b2b2b, 0.5); 
+        macroParts.nh4cl = createMacroWedge(1.8, 2.8, height-0.4, 0xfcf5c7, 0.25); 
+        macroParts.zinc = createMacroWedge(2.8, 3.0, height, 0xaaaaaa, 0.3, true); 
+
+        Object.keys(macroParts).forEach(key => {
+            const grp = new THREE.Group();
+            grp.add(macroParts[key]);
+            macroParts[key].parentGroup = grp; 
+            macroGroup.add(grp);
+        });
+
+        const explodeOffsets = { cap: 12, carbon: 9, mno2: 6, nh4cl: 3, zinc: 0 };
+
+        // --- 构建微观粒子群 ---
+        const microGroup = new THREE.Group(); batteryGroup.add(microGroup);
+        const particles = []; 
+        function createCloud(geo, pbrMat, count, rMin, rMax, isProduct) {
+            const mesh = new THREE.InstancedMesh(geo, pbrMat.clone(), count);
+            const pData = []; const dummy = new THREE.Object3D();
+            for (let i=0; i<count; i++) {
+                const r = rMin + Math.random()*(rMax-rMin);
+                const a = -Math.PI*1.5 + Math.random()*(Math.PI*1.5);
+                const y = -4.5 + Math.random()*9;
+                const scale = 0.6 + Math.random()*0.4;
+                pData.push({ r, a, y, rotX: Math.random()*3, rotY: Math.random()*3, rotZ: Math.random()*3, baseScale: scale });
+                dummy.position.set(r*Math.cos(a), y, r*Math.sin(a));
+                dummy.scale.setScalar(isProduct ? 0 : scale); 
+                dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
+            }
+            mesh.userData = { pData, isProduct }; microGroup.add(mesh); particles.push(mesh); return mesh;
+        }
+
+        createCloud(new THREE.SphereGeometry(0.12, 8, 8), PBR_MATS.Zn, 600, 2.85, 2.95, false);
+        createCloud(new THREE.SphereGeometry(0.15, 8, 8), PBR_MATS.N, 600, 1.9, 2.7, false);
+        createCloud(new THREE.DodecahedronGeometry(0.18, 0), PBR_MATS.Mn, 400, 0.9, 1.7, false);
+        createCloud(new THREE.SphereGeometry(0.08, 8, 8), PBR_MATS.Zn, 500, 2.7, 2.9, true);
+        createCloud(new THREE.SphereGeometry(0.13, 8, 8), PBR_MATS.N, 600, 1.9, 2.7, true);
+        createCloud(new THREE.DodecahedronGeometry(0.17, 0), PBR_MATS.Mn, 400, 0.9, 1.7, true);
+
+        // 统一粒子群映射，为了在动画中赋予各层位移
+        const layerMap = ['zinc', 'nh4cl', 'mno2', 'zinc', 'nh4cl', 'mno2'];
+
+        const posInspect = new THREE.Vector3(0, 6.5, 8); 
+        const rotInspect = new THREE.Euler(0, -Math.PI / 4, 0);
+        const posCar = new THREE.Vector3(0, 7.9, -5); 
+        const rotCar = new THREE.Euler(0, 0, -Math.PI / 2);
+        batteryGroup.position.copy(posInspect); batteryGroup.rotation.copy(rotInspect);
+
+        // --- 构建四驱车 ---
+        const carGroup = new THREE.Group(); scene.add(carGroup);
+        carGroup.position.set(0, 0, -5); 
+        const carShape = new THREE.Shape();
+        carShape.moveTo(-12, 1); carShape.lineTo(12, 1); carShape.lineTo(13, 2);
+        carShape.lineTo(7, 3.5); carShape.lineTo(2, 6.5); carShape.lineTo(-5, 6.5);
+        carShape.lineTo(-11, 4); carShape.lineTo(-13, 4.5); carShape.lineTo(-12, 1);
+        const bodyGeo = new THREE.ExtrudeGeometry(carShape, { depth: 10, bevelEnabled: true, bevelSize: 0.5, bevelThickness: 0.5 });
+        bodyGeo.translate(0, 0, -5);
+        const bodyMat = new THREE.MeshPhysicalMaterial({ color: 0x111115, metalness: 0.9, roughness: 0.1, transmission: 0.7, opacity: 1, transparent: true });
+        
+        const carBody = new THREE.Mesh(bodyGeo, bodyMat); carBody.position.y = 3.7; carGroup.add(carBody);
+        const neon = new THREE.Mesh(new THREE.BoxGeometry(24, 0.2, 10.2), new THREE.MeshBasicMaterial({ color: 0x00f0ff }));
+        neon.position.set(0, 4.9, 0); carGroup.add(neon);
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(26, 1, 12), new THREE.MeshStandardMaterial({color: 0x222}));
+        chassis.position.y = 4.2; carGroup.add(chassis);
+        const slot = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 4), new THREE.MeshBasicMaterial({color: 0xff0055, wireframe: true}));
+        slot.position.set(0, 4.9, 0); carGroup.add(slot);
+        
+        const wheels = [];
+        [[-8, 4.2, 6.5], [8, 4.2, 6.5], [-8, 4.2, -6.5], [8, 4.2, -6.5]].forEach(p => {
+            const wG = new THREE.Group();
+            wG.add(new THREE.Mesh(new THREE.TorusGeometry(3, 1.2, 16, 50), new THREE.MeshStandardMaterial({color: 0x050505, roughness: 0.9})));
+            const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 1, 16), new THREE.MeshStandardMaterial({color: 0x333, metalness: 0.8}));
+            rim.rotation.x = Math.PI/2; wG.add(rim);
+            const spoke = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.5, 1.1), new THREE.MeshBasicMaterial({color: 0x00f0ff}));
+            const spoke2 = spoke.clone(); spoke2.rotation.z = Math.PI/2;
+            wG.add(spoke); wG.add(spoke2); wG.position.set(...p); carGroup.add(wG); wheels.push(wG);
+        });
+
+        const circuitCurve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0, 11, 0),    
+            new THREE.Vector3(6, 11, 0),    
+            new THREE.Vector3(8, 6, 0),      
+            new THREE.Vector3(6, 4.5, 0),      
+            new THREE.Vector3(0, 4.5, 0),      
+            new THREE.Vector3(-3, 7.5, 0),   
+            new THREE.Vector3(0, 11, 0)     
+        ], true);
+        
+        const numElectrons = 20;
+        const circuitElectrons = [];
+        for(let i=0; i<numElectrons; i++) {
+            const el = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), PBR_MATS.E);
+            carGroup.add(el); circuitElectrons.push(el);
+        }
+
+        // --- 5. 交互式演播室与分子映射 ---
+        const studioGroup = new THREE.Group(); scene.add(studioGroup);
+        const molRegistry = {}; 
+
+        function createPBRAtom(r, pbrMat) { return new THREE.Mesh(new THREE.SphereGeometry(r, 32, 32), pbrMat.clone()); }
+        function createPBRBond(p1, p2) {
+            const d = p1.distanceTo(p2);
+            const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, d, 8), PBR_MATS.Bond.clone());
+            cyl.position.copy(p1).lerp(p2, 0.5); cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+            return cyl;
+        }
+
+        function buildPBRCrystal(type) {
+            const group = new THREE.Group();
+            if (type === 'MnO2' || type === 'MnOOH') {
+                const spacing = 0.7; 
+                for(let x=-1; x<=1; x++) {
+                    for(let y=-1; y<=1; y++) {
+                        for(let z=-1; z<=1; z++) {
+                            const isMn = (Math.abs(x) + Math.abs(y) + Math.abs(z)) % 2 === 0;
+                            if (isMn) {
+                                const mn = createPBRAtom(0.45, PBR_MATS.Mn); mn.position.set(x*spacing, y*spacing, z*spacing); group.add(mn);
+                            } else {
+                                const o = createPBRAtom(0.35, PBR_MATS.O); o.position.set(x*spacing, y*spacing, z*spacing); group.add(o);
+                                if (type === 'MnOOH' && Math.random() > 0.4) {
+                                    const h = createPBRAtom(0.2, PBR_MATS.H);
+                                    h.position.set(x*spacing + Math.sign(x)*0.25, y*spacing + Math.sign(y)*0.25, z*spacing + Math.sign(z)*0.25);
+                                    if(x===0 && y===0 && z===0) h.position.set(0.25, 0.25, 0.25);
+                                    group.add(h);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (type === 'Zn') {
+                const spacing = 0.8;
+                for(let x=-1; x<=1; x++) {
+                    for(let y=-1; y<=1; y++) {
+                        for(let z=-1; z<=1; z++) {
+                            const zn = createPBRAtom(0.45, PBR_MATS.Zn); zn.position.set(x*spacing, y*spacing, z*spacing); group.add(zn);
+                        }
+                    }
+                }
+            }
+            return group;
+        }
+
+        const studioCathode = new THREE.Group(); studioCathode.position.set(0, 100, 0); studioGroup.add(studioCathode);
+        const reactGrpC = new THREE.Group(); reactGrpC.position.set(-6, 0, 0); studioCathode.add(reactGrpC);
+        const mno2Mol = buildPBRCrystal('MnO2'); mno2Mol.position.set(-3, 0, 0); reactGrpC.add(mno2Mol); molRegistry['mno2'] = mno2Mol;
+        const nh4Mol = new THREE.Group(); nh4Mol.position.set(4, 0, 0);
+        const n1 = createPBRAtom(0.5, PBR_MATS.N); nh4Mol.add(n1); 
+        const tetraPos = [new THREE.Vector3(1,1,1), new THREE.Vector3(1,-1,-1), new THREE.Vector3(-1,1,-1), new THREE.Vector3(-1,-1,1)];
+        tetraPos.forEach(p => { const h = createPBRAtom(0.25, PBR_MATS.H); h.position.copy(p).normalize().multiplyScalar(1.2); nh4Mol.add(h); nh4Mol.add(createPBRBond(n1.position, h.position)); });
+        reactGrpC.add(nh4Mol); molRegistry['nh4'] = nh4Mol;
+        const eCath = createPBRAtom(0.2, PBR_MATS.E); eCath.position.set(0, -2.5, 0); reactGrpC.add(eCath); molRegistry['e_cath'] = eCath;
+
+        const prodGrpC = new THREE.Group(); prodGrpC.position.set(6, 0, 0); studioCathode.add(prodGrpC);
+        const mnoohMol = buildPBRCrystal('MnOOH'); mnoohMol.position.set(-3, 0, 0); prodGrpC.add(mnoohMol); molRegistry['mnooh'] = mnoohMol;
+        const nh3Mol = new THREE.Group(); nh3Mol.position.set(4, -0.3, 0);
+        const n2 = createPBRAtom(0.5, PBR_MATS.N); nh3Mol.add(n2);
+        const triPyramidPos = [new THREE.Vector3(1,-1,-1), new THREE.Vector3(-1,1,-1), new THREE.Vector3(-1,-1,1)];
+        triPyramidPos.forEach(p => { const h = createPBRAtom(0.25, PBR_MATS.H); h.position.copy(p).normalize().multiplyScalar(1.2); nh3Mol.add(h); nh3Mol.add(createPBRBond(n2.position, h.position)); });
+        prodGrpC.add(nh3Mol); molRegistry['nh3'] = nh3Mol;
+
+        const studioAnode = new THREE.Group(); studioAnode.position.set(0, 200, 0); studioGroup.add(studioAnode);
+        const reactGrpA = new THREE.Group(); reactGrpA.position.set(-5, 0, 0); studioAnode.add(reactGrpA);
+        const znMol = buildPBRCrystal('Zn'); reactGrpA.add(znMol); molRegistry['zn'] = znMol;
+        const prodGrpA = new THREE.Group(); prodGrpA.position.set(5, 0, 0); studioAnode.add(prodGrpA);
+        const znIonMol = createPBRAtom(0.35, PBR_MATS.Zn); prodGrpA.add(znIonMol); molRegistry['zn2'] = znIonMol;
+        const eAnod = new THREE.Group();
+        const e1 = createPBRAtom(0.2, PBR_MATS.E); e1.position.set(1.5, 1.2, 0); eAnod.add(e1);
+        const e2 = createPBRAtom(0.2, PBR_MATS.E); e2.position.set(1.5, -1.2, 0); eAnod.add(e2);
+        prodGrpA.add(eAnod); molRegistry['e_anod'] = eAnod;
+
+        const molMappers = [mno2Mol, nh4Mol, mnoohMol, nh3Mol, znMol, znIonMol];
+
+        window.highlightMol = function(id) {
+            Object.keys(molRegistry).forEach(key => {
+                molRegistry[key].traverse(child => { if(child.isMesh) { child.material.opacity = 0.15; child.material.transparent = true; } });
+            });
+            if (molRegistry[id]) {
+                molRegistry[id].traverse(child => { if(child.isMesh) child.material.opacity = 1.0; });
+                new TWEEN.Tween(molRegistry[id].scale).to({x:1.15, y:1.15, z:1.15}, 200).start();
+            }
+        };
+
+        window.resetMol = function() {
+            Object.keys(molRegistry).forEach(key => {
+                const mol = molRegistry[key];
+                mol.traverse(child => { if(child.isMesh) { child.material.opacity = 1.0; child.material.transparent = (child.material.transmission > 0); } });
+                new TWEEN.Tween(mol.scale).to({x:1, y:1, z:1}, 200).start();
+            });
+        };
+
+        // --- 6. 标签与模式切换系统 ---
+        const svgLayer = document.getElementById('svg-layer');
+        const labelsContainer = document.getElementById('labels-container');
+        
+        const labelsData = {
+            micro: [
+                { id:'cath', title: '正极反应区', desc: 'MnO₂ 得到电子被还原', pos: new THREE.Vector3(1.3, -0.5, 0), ox: 220, oy: -30, micro: true, action: "viewMechanism('cathode')", part: 'mno2' },
+                { id:'anod', title: '负极反应区', desc: 'Zn 失去电子被氧化', pos: new THREE.Vector3(2.9, -4.5, 0), ox: 200, oy: 60, micro: true, action: "viewMechanism('anode')", part: 'zinc' }
+            ],
+            macro: [
+                { title: '正极铜帽 (+)', desc: '负责导出电流', pos: new THREE.Vector3(0, 5, 0), ox: -160, oy: -60, part: 'cap' },
+                { title: '中心碳棒', desc: '高导电骨架', pos: new THREE.Vector3(0, 2, 0.4), ox: -180, oy: -20, part: 'carbon' },
+                { title: '二氧化锰层', desc: '正极核心反应物', pos: new THREE.Vector3(0, 0, 1.3), ox: 180, oy: 0, part: 'mno2' },
+                { title: '电解质层', desc: 'NH₄Cl 糊状物', pos: new THREE.Vector3(0, -2, 2.3), ox: -180, oy: 20, part: 'nh4cl' },
+                { title: '锌筒外壳 (-)', desc: '负极核心反应物', pos: new THREE.Vector3(0, -4, 2.9), ox: 180, oy: 60, part: 'zinc' }
+            ]
+        };
+
+        const htmlElements = [];
+        
+        function renderLabels() {
+            labelsContainer.innerHTML = ''; svgLayer.innerHTML = ''; htmlElements.length = 0;
+            labelsData[viewMode].forEach(d => {
+                const div = document.createElement('div');
+                div.className = `label ${d.micro ? 'label-micro' : ''}`;
+                let htmlStr = `<span class="label-title ${d.micro?'micro-title':''}">${d.title}</span><span class="label-desc">${d.desc}</span>`;
+                if(d.micro && d.action) {
+                    htmlStr += `<button class="btn-zoom" onclick="${d.action}">🔍 深入分子机理</button>`;
+                }
+                div.innerHTML = htmlStr;
+                labelsContainer.appendChild(div);
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('class', 'guide-line'); if(d.micro) line.style.stroke = '#ff0055';
+                svgLayer.appendChild(line);
+
+                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot.setAttribute('r', '4'); dot.setAttribute('fill', d.micro ? '#ff0055' : '#00f0ff');
+                svgLayer.appendChild(dot);
+
+                htmlElements.push({ data: d, div, line, dot });
+            });
+        }
+
+        function updateLabelsPos() {
+            if (isDriving || mechMode !== null || isTouring) {
+                htmlElements.forEach(item => { item.div.style.opacity = 0; item.line.style.opacity = 0; item.dot.style.opacity = 0; item.div.style.pointerEvents = 'none'; });
+                document.getElementById('header-panel').style.opacity = (mechMode || isTouring) ? 0 : 1;
+                document.getElementById('legend-panel').style.opacity = (mechMode || isTouring) ? 0 : 1;
+                return;
+            }
+
+            document.getElementById('header-panel').style.opacity = 1;
+            document.getElementById('legend-panel').style.opacity = (viewMode === 'micro') ? 1 : 0;
+
+            const wHalf = window.innerWidth / 2, hHalf = window.innerHeight / 2;
+            batteryGroup.updateMatrixWorld();
+            
+            htmlElements.forEach(item => {
+                let localPos = item.data.pos.clone();
+                // 动态追踪拆解部件的Y轴偏移
+                if (item.data.part && macroParts[item.data.part]) {
+                    localPos.y += macroParts[item.data.part].parentGroup.position.y;
+                }
+
+                const pos = localPos.applyMatrix4(batteryGroup.matrixWorld).project(camera);
+                if (pos.z > 1) { item.div.style.opacity = 0; item.line.style.opacity = 0; item.dot.style.opacity = 0; item.div.style.pointerEvents = 'none'; return; }
+                
+                item.div.style.opacity = 1; item.line.style.opacity = 0.6; item.dot.style.opacity = 1; item.div.style.pointerEvents = 'auto';
+                const ax = (pos.x * wHalf) + wHalf, ay = -(pos.y * hHalf) + hHalf;
+                const fx = ax + item.data.ox, fy = ay + item.data.oy;
+
+                item.div.style.left = `${fx}px`; item.div.style.top = `${fy}px`;
+                item.line.setAttribute('x1', ax); item.line.setAttribute('y1', ay);
+                item.line.setAttribute('x2', fx); item.line.setAttribute('y2', fy);
+                item.dot.setAttribute('cx', ax); item.dot.setAttribute('cy', ay);
+            });
+        }
+
+        window.toggleView = function(mode) {
+            if (isTouring) return;
+            viewMode = mode;
+            document.getElementById('btn-micro').className = `view-btn ${mode === 'micro' ? 'active' : ''}`;
+            document.getElementById('btn-macro').className = `view-btn ${mode === 'macro' ? 'active' : ''}`;
+            
+            macroGroup.visible = true; 
+            microGroup.visible = (mode === 'micro'); 
+            renderLabels();
+        };
+
+        window.toggleExplode = function() {
+            isExploded = !isExploded;
+            const btn = document.getElementById('btn-explode');
+            btn.className = `view-btn btn-explode ${isExploded ? 'active' : ''}`;
+            btn.innerHTML = isExploded ? '🔄 组合视图' : '💥 拆解透视';
+            
+            Object.keys(macroParts).forEach(key => {
+                const targetY = isExploded ? explodeOffsets[key] : 0;
+                new TWEEN.Tween(macroParts[key].parentGroup.position).to({y: targetY}, 1000).easing(TWEEN.Easing.Cubic.InOut).start();
+            });
+        };
+
+        window.toggleDrive = function() {
+            if (isTouring) return;
+            if (isExploded) toggleExplode(); 
+            triggerDrive();
+        };
+
+        function triggerDrive() {
+            isDriving = !isDriving;
+            const btn = document.getElementById('btn-action');
+            if (isDriving) { 
+                btn.innerHTML = '📤 拔出电池'; btn.className = 'action-btn btn-remove'; 
+                document.getElementById('btn-explode').style.display = 'none';
+            } 
+            else { 
+                btn.innerHTML = '📥 装入电池'; btn.className = 'action-btn btn-drive'; 
+                document.getElementById('btn-explode').style.display = 'block';
+            }
+        }
+
+        window.replaceBattery = function() {
+            batteryPower = 100;
+            document.getElementById('btn-replace').style.display = 'none';
+            document.getElementById('btn-action').style.display = 'block';
+        };
+
+        window.viewMechanism = function(type) {
+            mechMode = type;
+            document.getElementById('mechanism-overlay').style.display = 'flex';
+            document.getElementById('eq-cathode').style.display = (type === 'cathode') ? 'inline-block' : 'none';
+            document.getElementById('eq-anode').style.display = (type === 'anode') ? 'inline-block' : 'none';
+            
+            if(type === 'cathode') {
+                document.getElementById('mech-title').innerText = '正极反应机理分析';
+            } else {
+                document.getElementById('mech-title').innerText = '负极反应机理分析';
+            }
+            
+            if (!isTouring) {
+                targetCamPos.set(0, type === 'cathode' ? 100 : 200, 15);
+                targetCtrlPos.set(0, type === 'cathode' ? 100 : 200, 0);
+                transitionPhase = 1.0; 
+            }
+        };
+
+        window.exitMechanism = function() {
+            mechMode = null;
+            document.getElementById('mechanism-overlay').style.display = 'none';
+            if (!isTouring) {
+                targetCamPos.copy(camPosDef);
+                targetCtrlPos.copy(camTargetDef);
+                transitionPhase = 1.0; 
+            }
+        };
+
+        // --- 7. 智能沉浸式分步导览 ---
+        function tweenCamera(pos, target, duration) {
+            new TWEEN.Tween(camera.position).to(pos, duration).easing(TWEEN.Easing.Quadratic.InOut).start();
+            new TWEEN.Tween(controls.target).to(target, duration).easing(TWEEN.Easing.Quadratic.InOut).start();
+        }
+
+        function setSubtitle(text) {
+            const sub = document.getElementById('tour-subtitle');
+            sub.style.display = 'block'; sub.innerText = text;
+        }
+
+        window.toggleTour = function() { if (isTouring) { stopTour(); } else { startTour(); } };
+
+        function startTour() {
+            isTouring = true; controls.enabled = false; 
+            document.getElementById('btn-tour').innerHTML = '⏹️ 停止导览';
+            document.getElementById('dashboard').style.opacity = '0';
+            document.getElementById('dashboard').style.pointerEvents = 'none';
+
+            if (isDriving) triggerDrive();
+            if (isExploded) toggleExplode();
+            viewMode = 'macro'; macroGroup.visible = true; microGroup.visible = false;
+            batteryPower = 100;
+            if (mechMode) exitMechanism();
+            renderLabels(); 
+
+            const s1 = new TWEEN.Tween({t:0}).to({t:1}, 4000).onStart(() => {
+                setSubtitle("欢迎来到锌锰干电池全景沙盘。这是一节被剖开的电池，让我们先拆解看看它的分层构造。");
+                tweenCamera({x: 0, y: 7, z: 26}, {x: 0, y: 6.5, z: 8}, 3000);
+            });
+
+            const s1_5 = new TWEEN.Tween({t:0}).to({t:1}, 5000).onStart(() => {
+                toggleExplode();
+                setSubtitle("由外向内依次是：作为负极的锌筒、电解质糊、二氧化锰层，以及作为正极导体的碳棒。");
+                tweenCamera({x: -15, y: 15, z: 22}, {x: 0, y: 8, z: 0}, 4000);
+            });
+
+            const s2 = new TWEEN.Tween({t:0}).to({t:1}, 4000).onStart(() => {
+                toggleExplode(); viewMode = 'micro'; microGroup.visible = true; renderLabels();
+                setSubtitle("我们将视线深入微观。在中心的「正极区」，二氧化锰晶格与铵根离子在此聚集。");
+                tweenCamera({x: -1, y: 7, z: 12.5}, {x: -0.5, y: 7, z: 8}, 3000); 
+            });
+
+            const s3 = new TWEEN.Tween({t:0}).to({t:1}, 6000).onStart(() => {
+                viewMechanism('cathode');
+                setSubtitle("正极反应：二氧化锰得到电子，与铵根离子反应生成羟基氧化锰晶格和氨气。");
+                tweenCamera({x: 0, y: 100, z: 15}, {x: 0, y: 100, z: 0}, 2000); 
+            });
+
+            const s4 = new TWEEN.Tween({t:0}).to({t:1}, 4000).onStart(() => {
+                exitMechanism();
+                setSubtitle("让我们再来看看外部的「负极区」，它由厚实的锌晶体构成。");
+                tweenCamera({x: 5, y: 5, z: 12}, {x: 2.5, y: 5, z: 8}, 2000); 
+            });
+
+            const s5 = new TWEEN.Tween({t:0}).to({t:1}, 6000).onStart(() => {
+                viewMechanism('anode');
+                setSubtitle("负极反应：活跃的锌原子失去两个电子，发生氧化反应，转化为游离的锌离子。");
+                tweenCamera({x: 0, y: 200, z: 15}, {x: 0, y: 200, z: 0}, 2000);
+            });
+
+            const s6 = new TWEEN.Tween({t:0}).to({t:1}, 5000).onStart(() => {
+                exitMechanism(); viewMode = 'macro'; microGroup.visible = false; renderLabels();
+                setSubtitle("宏观的闭合需要微观的电子流！我们将电池装入赛车，接通回路。");
+                tweenCamera({x: 25, y: 18, z: 20}, {x: 0, y: 5, z: -5}, 3000);
+                setTimeout(() => { triggerDrive(); }, 2000);
+            });
+
+            const s7 = new TWEEN.Tween({t:0}).to({t:1}, 8000).onStart(() => {
+                viewMode = 'micro'; microGroup.visible = true; renderLabels();
+                setSubtitle("放电开始！观察外部的「金色电子流」，它为宏观的赛车提供了源源不断的动力！");
+                tweenCamera({x: 15, y: 12, z: -2}, {x: 0, y: 5, z: -5}, 4000);
+            });
+
+            const s8 = new TWEEN.Tween({t:0}).to({t:1}, 5000).onStart(() => {
+                setSubtitle("随着反应物耗尽，电子流减弱，失去动力的赛车最终停止了运行。导览结束。");
+            });
+
+            const sEnd = new TWEEN.Tween({t:0}).to({t:1}, 1000).onStart(() => { stopTour(); });
+
+            s1.chain(s1_5); s1_5.chain(s2); s2.chain(s3); s3.chain(s4); s4.chain(s5); s5.chain(s6); s6.chain(s7); s7.chain(s8); s8.chain(sEnd);
+            s1.start();
+        }
+
+        function stopTour() {
+            isTouring = false; TWEEN.removeAll(); controls.enabled = true;
+            document.getElementById('tour-subtitle').style.display = 'none';
+            document.getElementById('btn-tour').innerHTML = '▶️ 播放智能导览';
+            document.getElementById('dashboard').style.opacity = '1';
+            document.getElementById('dashboard').style.pointerEvents = 'auto';
+            document.getElementById('btn-micro').className = `view-btn ${viewMode === 'micro' ? 'active' : ''}`;
+            document.getElementById('btn-macro').className = `view-btn ${viewMode === 'macro' ? 'active' : ''}`;
+            renderLabels();
+        }
+
+        toggleView('micro');
+
+        const clock = new THREE.Clock();
+        const dummyAnim = new THREE.Object3D();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            
+            TWEEN.update(); 
+
+            if (transitionPhase > 0 && !isTouring) {
+                camera.position.lerp(targetCamPos, 0.08);
+                controls.target.lerp(targetCtrlPos, 0.08);
+                transitionPhase -= 0.015; 
+            }
+            controls.update(); 
+
+            if (mechMode !== null) {
+                molMappers.forEach((mol, idx) => {
+                    mol.rotation.y = time * 0.4 + idx;
+                    mol.rotation.x = Math.sin(time * 0.3 + idx) * 0.2;
+                    mol.position.y = Math.sin(time * 2 + idx) * 0.3;
+                });
+                eCath.position.y = -2.5 + Math.sin(time*5)*0.5;
+                eAnod.children[0].position.y = 1.2 + Math.sin(time*5)*0.5;
+                eAnod.children[1].position.y = -1.2 + Math.cos(time*5)*0.5;
+            }
+
+            const targetPos = isDriving ? posCar : posInspect;
+            const targetRot = isDriving ? rotCar : rotInspect;
+            batteryGroup.position.lerp(targetPos, 0.1);
+            batteryGroup.quaternion.slerpQuaternions(batteryGroup.quaternion, new THREE.Quaternion().setFromEuler(targetRot), 0.1);
+
+            if (isDriving && batteryPower > 0) {
+                batteryPower -= (isTouring ? 0.18 : 0.12); 
+                if (batteryPower <= 0) {
+                    batteryPower = 0;
+                    document.getElementById('btn-replace').style.display = 'block';
+                    document.getElementById('btn-action').style.display = 'none';
+                }
+            }
+            
+            document.getElementById('power-fill').style.transform = `scaleX(${batteryPower / 100})`;
+            const pt = document.getElementById('power-percent');
+            pt.innerText = Math.ceil(batteryPower) + '%';
+            pt.style.color = batteryPower < 20 ? '#ff0055' : (batteryPower < 50 ? '#f59e0b' : '#10b981');
+
+            const targetSpeed = (isDriving && batteryPower > 0) ? (batteryPower/100 * 0.4 + 0.1) : 0;
+            wheelSpeed = THREE.MathUtils.lerp(wheelSpeed, targetSpeed, 0.02);
+            if (wheelSpeed > 0.001) {
+                wheels.forEach(w => w.rotation.z -= wheelSpeed);
+                carGroup.position.y = 0 + Math.random() * (wheelSpeed * 0.1); 
+            } else { carGroup.position.y = 0; }
+
+            circuitElectrons.forEach((el, i) => {
+                if (isDriving && batteryPower > 0) {
+                    el.visible = true;
+                    const flowSpeed = (batteryPower / 100) * 1.5 + 0.5;
+                    const t = (time * flowSpeed * 0.2 + i / numElectrons) % 1;
+                    const pt = circuitCurve.getPointAt(t);
+                    el.position.copy(pt);
+                } else {
+                    el.visible = false;
+                }
+            });
+
+            // 核心修复：在这里同步微观粒子的 Y 轴偏移
+            if (viewMode === 'micro' && mechMode === null) {
+                const powerRatio = batteryPower / 100;
+                particles.forEach((cloud, idx) => {
+                    const data = cloud.userData;
+                    const explodeY = macroParts[layerMap[idx]].parentGroup.position.y; // 完美获取对应的 Y 轴偏移量
+                    
+                    for(let i=0; i<data.pData.length; i++) {
+                        const p = data.pData[i];
+                        const activeScale = data.isProduct ? p.baseScale * Math.max((1 - powerRatio), 0.01) : p.baseScale * Math.max(powerRatio, 0.01);
+                        const wY = p.y + explodeY + Math.sin(time*3+i)*0.02; // 添加偏移
+                        dummyAnim.position.set(p.r*Math.cos(p.a), wY, p.r*Math.sin(p.a));
+                        dummyAnim.rotation.set(p.rotX+time*0.5, p.rotY, p.rotZ);
+                        dummyAnim.scale.setScalar(activeScale);
+                        dummyAnim.updateMatrix(); cloud.setMatrixAt(i, dummyAnim.matrix);
+                    }
+                    cloud.instanceMatrix.needsUpdate = true;
+                });
+            }
+
+            updateLabelsPos();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+
+    <script>
+        // ========== 返回主页函数（独立于模块） ==========
+        function goBackHome() {
+            let currentPath = window.location.pathname;
+            let baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            let targetUrl = baseDir + 'index.html';
+            let debugDiv = document.createElement('div');
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.bottom = '100px';
+            debugDiv.style.left = '10px';
+            debugDiv.style.background = 'rgba(0,0,0,0.7)';
+            debugDiv.style.color = 'white';
+            debugDiv.style.padding = '8px';
+            debugDiv.style.borderRadius = '8px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.innerText = '返回主页: ' + targetUrl;
+            document.body.appendChild(debugDiv);
+            setTimeout(() => debugDiv.remove(), 1500);
+            window.location.href = targetUrl;
+        }
+
+        document.getElementById('back-to-home').addEventListener('click', goBackHome);
+    </script>
+</body>
+</html>
