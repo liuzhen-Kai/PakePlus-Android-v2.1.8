@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>3D 电解池全息认知模型</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #2a3c54 0%, #111a24 100%); 
+            font-family: 'Microsoft YaHei', -apple-system, sans-serif;
+            color: #fff;
+            /* 禁用移动端默认的点击高亮和长按菜单 */
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        
+        #ui-layer {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .title {
+            font-size: 22px; /* 针对手机端缩小字号 */
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #7dd3fc; 
+            text-shadow: 0px 0px 10px rgba(125,211,252,0.6);
+            margin-bottom: 4px;
+        }
+
+        /* 极致紧凑的胶囊式控制台 */
+        #control-panel {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(30, 41, 59, 0.65);
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 5px 8px;
+            border-radius: 25px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+        }
+        
+        select {
+            background: transparent;
+            border: none;
+            color: #7dd3fc;
+            padding: 6px;
+            outline: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 15px;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%237dd3fc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right center;
+            background-size: 8px auto;
+        }
+        select option { background: #1e293b; color: #fff; }
+        
+        button {
+            background: linear-gradient(135deg, #7dd3fc 0%, #0ea5e9 100%);
+            border: none;
+            color: #000;
+            font-weight: bold;
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 18px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:active { transform: scale(0.95); }
+
+        /* 导览面板适配手机横屏 */
+        #tour-panel {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 450px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid #7dd3fc;
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            border-radius: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #fff;
+            z-index: 30;
+            box-shadow: 0 0 20px rgba(125,211,252,0.4);
+            animation: fadeIn 0.4s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 15px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+    <div id="ui-layer">
+        <div class="title">3D 电解池全息模型</div>
+    </div>
+
+    <!-- 极简控制台 -->
+    <div id="control-panel">
+        <select id="instance-select">
+            <option value="abstract">抽象概念模型</option>
+            <option value="cucl2">电解氯化铜</option>
+            <option value="water">电解水(含Na₂SO₄)</option>
+            <option value="electroplating">电镀铜工艺</option>
+            <option value="nacl">电解熔融NaCl</option>
+        </select>
+        <button id="btn-tour">▶ 沉浸导览</button>
+    </div>
+
+    <div id="tour-panel"></div>
+    <div id="canvas-container"></div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x111a24, 0.012);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 48); 
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.toneMapping = THREE.NoToneMapping; 
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05;
+        controls.maxDistance = 100; controls.minDistance = 5;
+        controls.target.set(0, 2, 0);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.4); 
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 20, 30);
+        scene.add(dirLight);
+
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.4, 0.85);
+        bloomPass.threshold = 0.95; 
+        bloomPass.strength = 1.0;
+        bloomPass.radius = 0.6;
+
+        const composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        const instanceData = {
+            abstract: {
+                anodeMat: "阳极材料", cathodeMat: "阴极材料",
+                reductant: "还原剂", oxidant: "氧化剂",
+                oxProd: "氧化产物", redProd: "还原产物",
+                ionCond: "离子导体", eCond: "电子导体",
+                solColor: 0xdc2626,
+                anionName: "阴离子", cationName: "阳离子"
+            },
+            cucl2: {
+                anodeMat: "石墨极 (C)", cathodeMat: "石墨极 (C)",
+                reductant: "2Cl⁻", oxidant: "Cu²⁺",
+                oxProd: "Cl₂↑", redProd: "Cu",
+                ionCond: "CuCl₂溶液", eCond: "外导线",
+                plateLColor: 0x1f2937, plateRColor: 0x1f2937, solColor: 0x059669, 
+                plateLName: "C棒", plateRName: "C棒", solName: "氯化铜溶液",
+                anionName: "Cl⁻", cationName: "Cu²⁺"
+            },
+            water: {
+                anodeMat: "铂电极 (Pt)", cathodeMat: "铂电极 (Pt)",
+                reductant: "4OH⁻", oxidant: "4H⁺",
+                oxProd: "O₂↑ + 2H₂O", redProd: "2H₂↑",
+                ionCond: "Na₂SO₄溶液", eCond: "外导线",
+                plateLColor: 0xcbd5e1, plateRColor: 0xcbd5e1, solColor: 0x94a3b8, 
+                plateLName: "Pt极板", plateRName: "Pt极板", solName: "硫酸钠溶液",
+                anionName: "SO₄²⁻/OH⁻", cationName: "Na⁺/H⁺"
+            },
+            electroplating: {
+                anodeMat: "纯铜 (Cu)", cathodeMat: "铁件 (Fe)",
+                reductant: "Cu", oxidant: "Cu²⁺",
+                oxProd: "Cu²⁺", redProd: "Cu",
+                ionCond: "CuSO₄溶液", eCond: "外导线",
+                plateLColor: 0xb87333, plateRColor: 0xa1a1aa, solColor: 0x2563eb, 
+                plateLName: "粗铜块", plateRName: "待镀铁件", solName: "硫酸铜溶液",
+                anionName: "SO₄²⁻", cationName: "Cu²⁺"
+            },
+            nacl: {
+                anodeMat: "石墨 (C)", cathodeMat: "铁极 (Fe)",
+                reductant: "2Cl⁻", oxidant: "2Na⁺",
+                oxProd: "Cl₂↑", redProd: "2Na",
+                ionCond: "熔融NaCl", eCond: "外导线",
+                plateLColor: 0x1f2937, plateRColor: 0xa1a1aa, solColor: 0xfacc15, 
+                plateLName: "石墨阳极", plateRName: "铁阴极", solName: "熔融态NaCl",
+                anionName: "Cl⁻", cationName: "Na⁺"
+            }
+        };
+
+        const interactableObjects = [];
+        const parts = {}; 
+
+        const animState = {
+            redCube: 1.0, blueCube: 1.0, greenCubeL: 1.0, greenCubeR: 1.0,
+            flashG1: false, flashG2: false,
+            ionAnim: false, electronAnim: false, isTouring: false,
+            currentModel: 'abstract'
+        };
+
+        const textScaleRatio = 0.0105; 
+
+        function generateTextTexture(text, color, fontSize = 60) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = `bold ${fontSize}px "Microsoft YaHei", sans-serif`;
+            const lines = text.split('\n');
+            let maxWidth = 0;
+            lines.forEach(line => {
+                const w = context.measureText(line).width;
+                if (w > maxWidth) maxWidth = w;
+            });
+            const lineHeight = fontSize * 1.2;
+            canvas.width = maxWidth + 20;
+            canvas.height = lines.length * lineHeight + 20;
+            if (text.trim() === "") { canvas.width = 2; canvas.height = 2; }
+            context.font = `bold ${fontSize}px "Microsoft YaHei", sans-serif`;
+            context.fillStyle = (color === '#000000') ? '#ffffff' : color; 
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            const startY = canvas.height / 2 - ((lines.length - 1) * lineHeight) / 2;
+            if (text.trim() !== "") {
+                lines.forEach((line, index) => {
+                    context.fillText(line, canvas.width / 2, startY + index * lineHeight);
+                });
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return { texture, width: canvas.width, height: canvas.height };
+        }
+
+        function createText(text, color, tx, ty, tz, fontSize = 60, name = null, parent = null) {
+            const { texture, width, height } = generateTextTexture(text, color, fontSize);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            
+            sprite.scale.set(width * textScaleRatio, height * textScaleRatio, 1);
+            sprite.position.set(tx, ty, tz);
+            sprite.renderOrder = 999;
+            
+            if (name) {
+                sprite.userData.name = name;
+                sprite.userData.baseScale = new THREE.Vector3(sprite.scale.x, sprite.scale.y, 1);
+                interactableObjects.push(sprite);
+                parts[name] = sprite;
+            }
+            if(parent) parent.add(sprite);
+            return sprite;
+        }
+
+        function updateSpriteText(spriteName, newText, color) {
+            const sprite = parts[spriteName];
+            if(!sprite) return;
+            const { texture, width, height } = generateTextTexture(newText, color, 60);
+            sprite.material.map.dispose();
+            sprite.material.map = texture;
+            sprite.scale.set(width * textScaleRatio, height * textScaleRatio, 1);
+            sprite.userData.baseScale.copy(sprite.scale);
+        }
+
+        function buildModel() {
+            const group = new THREE.Group();
+            scene.add(group);
+            parts.mainGroup = group;
+
+            function createGlassBlock(w, h, d, colorHex, bx, by, bz, name = null) {
+                const geometry = new THREE.BoxGeometry(w, h, d);
+                const material = new THREE.MeshPhysicalMaterial({ 
+                    color: colorHex, transmission: 0.5, opacity: 0.25,      
+                    transparent: true, roughness: 0.1, metalness: 0.2,
+                    side: THREE.DoubleSide, depthWrite: false   
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(bx, by, bz);
+                
+                const edges = new THREE.EdgesGeometry(geometry);
+                const lineMaterial = new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2, transparent: true, opacity: 0.9 });
+                const line = new THREE.LineSegments(edges, lineMaterial);
+                mesh.add(line);
+                
+                if (name) { mesh.userData.name = name; parts[name] = mesh; }
+                group.add(mesh);
+                return mesh;
+            }
+
+            function createArrow(dir, originVec, length, colorHex, headLength = 0.8, headWidth = 0.5, parent = group) {
+                const c = (colorHex === 0x000000) ? 0xd1d5db : colorHex;
+                const arrow = new THREE.ArrowHelper(dir.normalize(), originVec, length, c, headLength, headWidth);
+                arrow.line.material.depthTest = false;
+                arrow.cone.material.depthTest = false;
+                arrow.line.renderOrder = 998;
+                arrow.cone.renderOrder = 998;
+                parent.add(arrow);
+                return arrow;
+            }
+
+            const blockD = 10, cubeZ = 3, bottomH = 5, topH = 2.5, sideW = 4, midW = 6;       
+
+            createGlassBlock(sideW, bottomH, blockD, 0x059669, -5, -2.5, cubeZ, "greenCubeL"); 
+            createGlassBlock(sideW, bottomH, blockD, 0x059669, 5, -2.5, cubeZ, "greenCubeR");  
+            createGlassBlock(midW, bottomH, blockD, 0xdc2626, 0, -2.5, cubeZ, "redCube");      
+            createGlassBlock(sideW*2 + midW, topH, blockD, 0x2563eb, 0, 1.25, cubeZ, "blueCube"); 
+
+            const pGeo = new THREE.BoxGeometry(4.6, 2.0, 2.5);
+            const pMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.2 });
+            const powerMesh = new THREE.Mesh(pGeo, pMat);
+            powerMesh.position.set(0, 11.5, cubeZ);
+            const pEdge = new THREE.LineSegments(new THREE.EdgesGeometry(pGeo), new THREE.LineBasicMaterial({ color: 0x94a3b8 }));
+            powerMesh.add(pEdge);
+            group.add(powerMesh);
+
+            createText("直流电源", "#ffffff", 0, 11.5, cubeZ+1.3, 40, null, group);
+            createText("+", "#ef4444", -1.5, 11.5, cubeZ+1.3, 70, null, group);
+            createText("-", "#3b82f6", 1.5, 11.5, cubeZ+1.3, 70, null, group);
+            createText("电势高", "#d1d5db", -5, 11.5, 0, 60, null, group);
+            createText("电势低", "#d1d5db", 5, 11.5, 0, 60, null, group);
+
+            parts.pAnodeTop = new THREE.Vector3(-4.5, 2.5, 0);
+            parts.pPowerPos = new THREE.Vector3(-1.4, 11.5, 0);
+            parts.pPowerNeg = new THREE.Vector3(1.4, 11.5, 0);
+            parts.pCathodeTop = new THREE.Vector3(4.5, 2.5, 0);
+            
+            createArrow(parts.pPowerPos.clone().sub(parts.pAnodeTop), parts.pAnodeTop, parts.pPowerPos.clone().sub(parts.pAnodeTop).length(), 0x0099FF, 1.0, 0.6);
+            createArrow(parts.pCathodeTop.clone().sub(parts.pPowerNeg), parts.pPowerNeg, parts.pCathodeTop.clone().sub(parts.pPowerNeg).length(), 0x0099FF, 1.0, 0.6);
+
+            const wireCurveL = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-5, 0, cubeZ), new THREE.Vector3(-4.5, 2.5, cubeZ), new THREE.Vector3(-1.4, 3.75, cubeZ));
+            const wireCurveR = new THREE.QuadraticBezierCurve3(new THREE.Vector3(5, 0, cubeZ), new THREE.Vector3(4.5, 2.5, cubeZ), new THREE.Vector3(1.4, 3.75, cubeZ));
+            const tubeMat = new THREE.MeshStandardMaterial({ color: 0xb87333, metalness: 0.9, roughness: 0.2 });
+            const innerWireL = new THREE.Mesh(new THREE.TubeGeometry(wireCurveL, 20, 0.15, 8, false), tubeMat);
+            const innerWireR = new THREE.Mesh(new THREE.TubeGeometry(wireCurveR, 20, 0.15, 8, false), tubeMat);
+            innerWireL.visible = false; innerWireR.visible = false;
+            group.add(innerWireL); group.add(innerWireR);
+            parts.innerWireL = innerWireL; parts.innerWireR = innerWireR;
+
+            const plateGeo = new THREE.BoxGeometry(2.5, 4.5, 8);
+            const innerPlateL = new THREE.Mesh(plateGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 }));
+            innerPlateL.position.set(-5, -2.5, cubeZ); innerPlateL.visible = false;
+            group.add(innerPlateL); parts.innerPlateL = innerPlateL;
+
+            const innerPlateR = new THREE.Mesh(plateGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 }));
+            innerPlateR.position.set(5, -2.5, cubeZ); innerPlateR.visible = false;
+            group.add(innerPlateR); parts.innerPlateR = innerPlateR;
+
+            createText(" ", "#ffffff", -5, -1.0, 7.5, 50, "innerPlateLText", group);
+            createText(" ", "#ffffff", 5, -1.0, 7.5, 50, "innerPlateRText", group);
+            createText(" ", "#ffffff", 0, -1.0, 7.5, 50, "innerSolText", group);
+
+            const originVec = new THREE.Vector3(-7, -5, -3); 
+            createArrow(new THREE.Vector3(0, 1, 0), originVec, 11, 0xd1d5db);
+            createText("物质\n维度", "#ffffff", -7, 8.0, -3, 60, null, group); 
+            createArrow(new THREE.Vector3(1, 0, 0), originVec, 20, 0xd1d5db);
+            createText("装置\n维度", "#ffffff", 14.5, -5, -3, 60, null, group);
+            
+            const dirZ = new THREE.Vector3(0, 0, 1);
+            createArrow(dirZ, 14, 0xd1d5db);
+            scene.add(new THREE.ArrowHelper(dirZ.normalize(), originVec, 14, 0xd1d5db, 0.8, 0.5));
+            createText("能量\n维度", "#ffffff", -7, -6.5, 12, 60, null, group);
+            
+            createText("低自由能G1", "#fcd34d", -7, -6.5, 0, 60, "g1_label", group);
+            createText("高自由能G2", "#fcd34d", -7, -6.5, 6, 60, "g2_label", group);
+
+            createArrow(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 9.8, 0), 3.5, 0xfcd34d, 1.2, 0.6);
+            createText("电能", "#fcd34d", 0, 10.5, 0, 60, null, group); 
+            createText("化学能", "#fcd34d", 0, 5.0, 0, 60, null, group);    
+            
+            parts.cations = []; parts.anions = [];
+            const particleGeo = new THREE.SphereGeometry(0.12, 8, 8);
+            const cationMat = new THREE.MeshBasicMaterial({ color: 0xff7777 }); 
+            const anionMat = new THREE.MeshBasicMaterial({ color: 0xc084fc });  
+
+            for(let i=0; i<40; i++) {
+                const cMesh = new THREE.Mesh(particleGeo, cationMat);
+                cMesh.position.set((Math.random()-0.5)*5.6, -4.5 + Math.random()*4, -1.5 + Math.random()*9);
+                group.add(cMesh);
+                parts.cations.push({ mesh: cMesh, speed: 0.01 + Math.random()*0.02 });
+                
+                const aMesh = new THREE.Mesh(particleGeo, anionMat);
+                aMesh.position.set((Math.random()-0.5)*5.6, -4.5 + Math.random()*4, -1.5 + Math.random()*9);
+                group.add(aMesh);
+                parts.anions.push({ mesh: aMesh, speed: 0.01 + Math.random()*0.02 });
+            }
+
+            createText("阴离子", "#c084fc", -0.5, -1, 0, 50, "anion_text", group);
+            createArrow(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(-0.5, -1.8, 0), 1.5, 0xc084fc, 0.5, 0.4);
+
+            createText("阳离子", "#f87171", 0.5, -3, 0, 50, "cation_text", group);
+            createArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0.5, -3.8, 0), 1.5, 0xf87171, 0.5, 0.4);
+
+            const eGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            const eMat = new THREE.MeshStandardMaterial({ color: 0xffff66, emissive: 0xffff66, emissiveIntensity: 2.0 }); 
+            parts.electrons = [];
+            for(let i=0; i<8; i++) {
+                const eMesh = new THREE.Mesh(eGeo, eMat);
+                group.add(eMesh);
+                parts.electrons.push({ 
+                    mesh: eMesh, 
+                    offset: (i % 4) / 4, 
+                    pathIdx: i < 4 ? 1 : 2 
+                });
+            }
+
+            createText("电子转移", "#93c5fd", -8.5, 2.0, -3, 60, "electron_transfer_label", group);
+            createText("电极\n反应物", "#6ee7b7", -8.5, -1.0, -3, 60, "electrode_reactants", group); 
+            createText("离子迁移", "#f87171", -8.5, -3.0, -3, 60, "ion_migration_label", group);
+            createText("电极\n产物", "#6ee7b7", -8.5, -5.0, -3, 60, "electrode_products", group);
+            
+            const pReactL = new THREE.Vector3(-5, -1.8, 0), pProdL = new THREE.Vector3(-5, -3.8, 6);
+            createArrow(pProdL.clone().sub(pReactL), pReactL, pProdL.clone().sub(pReactL).length(), 0x6ee7b7);
+            createText(instanceData.abstract.reductant, "#6ee7b7", -5, -1.0, 0, 60, "reductant", group);
+            createText(instanceData.abstract.oxProd, "#6ee7b7", -5, -5.5, 6, 60, "ox_product", group); 
+            
+            const pReactR = new THREE.Vector3(5, -1.8, 0), pProdR = new THREE.Vector3(5, -3.8, 6);
+            createArrow(pProdR.clone().sub(pReactR), pReactR, pProdR.clone().sub(pReactR).length(), 0x6ee7b7);
+            createText(instanceData.abstract.oxidant, "#6ee7b7", 5, -1.0, 0, 60, "oxidant", group);
+            createText(instanceData.abstract.redProd, "#6ee7b7", 5, -5.5, 6, 60, "red_product", group); 
+
+            const bottomTextY = -7.2;
+            createText(instanceData.abstract.anodeMat, "#6ee7b7", -5, bottomTextY, -3, 60, "neg_material_text", group);
+            createText(instanceData.abstract.eCond, "#93c5fd", -2, bottomTextY, -3, 60, "electron_conductor_text", group); 
+            createText(instanceData.abstract.ionCond, "#f87171", 1.5, bottomTextY, -3, 60, "ion_conductor_text", group);
+            createText(instanceData.abstract.cathodeMat, "#6ee7b7", 5, bottomTextY, -3, 60, "pos_material_text", group);
+
+            const eqY = 14;
+            createText("还原剂", "#6ee7b7", -10, eqY, 0, 55, "eq_reductant", group);
+            createText("+", "#ffffff", -6.5, eqY, 0, 55, null, group);
+            createText("氧化剂", "#6ee7b7", -3, eqY, 0, 55, "eq_oxidant", group);
+            createText("=", "#ffffff", 1, eqY, 0, 55, null, group);
+            createText("电解", "#fcd34d", 1, eqY + 1.2, 0, 40, "eq_elec_energy", group);
+            createText("氧化产物", "#6ee7b7", 5.5, eqY, 0, 55, "eq_ox_product", group);
+            createText("+", "#ffffff", 9.5, eqY, 0, 55, "eq_plus_2", group); 
+            createText("还原产物", "#6ee7b7", 14, eqY, 0, 55, "eq_red_product", group);
+            
+            createText("ΔG=G2-G1＞0", "#fcd34d", 20, eqY, 0, 45, "eq_g_diff", group); 
+        }
+
+        buildModel();
+
+        // 全息卡片生成
+        const infoCards = {};
+        function createHoloCard(config) {
+            const { text, w=1024, h=256, color="#ffffff", customDraw=null } = config;
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = w; canvas.height = h;
+
+            const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+            bgGrad.addColorStop(0, 'rgba(30, 35, 45, 0.9)');
+            bgGrad.addColorStop(1, 'rgba(15, 20, 25, 0.95)');
+            ctx.fillStyle = bgGrad;
+            ctx.shadowBlur = 30; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowOffsetY = 10;
+            ctx.beginPath(); ctx.roundRect(20, 20, w-40, h-40, 40); ctx.fill();
+
+            ctx.shadowBlur = 0;
+            const borderGrad = ctx.createLinearGradient(20, 20, w-20, h-20);
+            borderGrad.addColorStop(0, 'rgba(255, 120, 120, 0.8)'); 
+            borderGrad.addColorStop(1, 'rgba(120, 200, 255, 0.5)'); 
+            ctx.strokeStyle = borderGrad; ctx.lineWidth = 4; ctx.stroke();
+
+            if (customDraw) {
+                customDraw(ctx, w, h);
+            } else {
+                ctx.fillStyle = color;
+                ctx.font = `bold 56px "PingFang SC", "Microsoft YaHei"`;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                const lines = text.split('\n');
+                const spacing = 56 * 1.5;
+                lines.forEach((line, i) => {
+                    ctx.fillText(line, w/2, h/2 + (i - (lines.length-1)/2) * spacing);
+                });
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            
+            const baseW = w / 150; 
+            const baseH = h / 150;
+            sprite.scale.set(baseW, baseH, 1); 
+            sprite.userData = { baseScale: new THREE.Vector3(baseW, baseH, 1) };
+            return sprite;
+        }
+
+        infoCards.migration = createHoloCard({
+            w: 1280, h: 640,
+            customDraw: (ctx) => {
+                ctx.fillStyle = '#ffffff'; ctx.font = 'bold 72px "PingFang SC"'; 
+                ctx.textAlign = 'center';
+                ctx.fillText('⚡ 离子迁移规律', 640, 160);
+                
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 3; ctx.beginPath();
+                ctx.moveTo(200, 230); ctx.lineTo(1080, 230); ctx.stroke();
+                
+                ctx.font = 'bold 64px "PingFang SC"';
+                ctx.textAlign = 'right'; ctx.fillStyle = '#ff7875'; 
+                ctx.fillText('阴离子 (－)', 540, 360);
+                ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff'; 
+                ctx.fillText('➔', 640, 360); 
+                ctx.textAlign = 'left'; ctx.fillStyle = '#73d13d'; 
+                ctx.fillText('向 阳极 (+) 移动', 740, 360);
+                
+                ctx.textAlign = 'right'; ctx.fillStyle = '#ff7875'; 
+                ctx.fillText('阳离子 (＋)', 540, 490);
+                ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff'; 
+                ctx.fillText('➔', 640, 490);
+                ctx.textAlign = 'left'; ctx.fillStyle = '#73d13d'; 
+                ctx.fillText('向 阴极 (-) 移动', 740, 490);
+            }
+        });
+        
+        infoCards.ionConductor = createHoloCard({text: '💡 离子交换膜 · 盐桥 · 电解质溶液', w: 1024, h: 220, color: '#ff7875'});
+        infoCards.elecConductor = createHoloCard({text: '💡 电极材料 · 导线 · 电源', w: 900, h: 220, color: '#78c0ff'});
+        infoCards.transfer = createHoloCard({text: '💡 电子从阳极流向电源正极\n💡 从电源负极流向阴极', w: 850, h: 350, color: '#78c0ff'});
+        infoCards.anodeMat = createHoloCard({text: '💡 石墨 · 铂 · 金 · 活性金属(如粗铜) 等', w: 1000, h: 220, color: '#6ee7b7'});
+        infoCards.cathodeMat = createHoloCard({text: '💡 石墨 · 铂 · 铁件 · 不锈钢 等', w: 900, h: 220, color: '#6ee7b7'});
+
+        function addWithPosSprite(obj, x, y, z) {
+            obj.position.set(x, y, z);
+            scene.add(obj);
+        }
+        addWithPosSprite(infoCards.migration, -11.5, -2.9, 0);
+        addWithPosSprite(infoCards.transfer, -11.5, 1.2, 0);
+        addWithPosSprite(infoCards.ionConductor, 1.5, -8.5, -1);
+        addWithPosSprite(infoCards.elecConductor, -2.5, -8.5, -1);
+        addWithPosSprite(infoCards.anodeMat, -5, -8.5, -1);
+        addWithPosSprite(infoCards.cathodeMat, 5, -8.5, -1);
+
+        document.getElementById('instance-select').addEventListener('change', (e) => {
+            const key = e.target.value;
+            animState.currentModel = key;
+            const data = instanceData[key];
+            
+            updateSpriteText('neg_material_text', data.anodeMat, "#6ee7b7");
+            updateSpriteText('pos_material_text', data.cathodeMat, "#6ee7b7");
+            updateSpriteText('reductant', data.reductant, "#6ee7b7");
+            updateSpriteText('oxidant', data.oxidant, "#6ee7b7");
+            updateSpriteText('ox_product', data.oxProd, "#6ee7b7");
+            updateSpriteText('red_product', data.redProd, "#6ee7b7");
+            updateSpriteText('ion_conductor_text', data.ionCond, "#f87171");
+            updateSpriteText('electron_conductor_text', data.eCond, "#93c5fd");
+            
+            updateSpriteText('eq_reductant', data.reductant, "#6ee7b7");
+            updateSpriteText('eq_oxidant', data.oxidant, "#6ee7b7");
+            updateSpriteText('eq_ox_product', data.oxProd, "#6ee7b7");
+            updateSpriteText('eq_red_product', data.redProd, "#6ee7b7");
+
+            if (data.redProd.trim() === "") {
+                parts.eq_plus_2.visible = false;
+            } else {
+                parts.eq_plus_2.visible = true;
+            }
+
+            updateSpriteText('anion_text', data.anionName, "#c084fc");
+            updateSpriteText('cation_text', data.cationName, "#f87171");
+
+            if (key === 'abstract') {
+                parts.innerWireL.visible = false; parts.innerWireR.visible = false;
+                parts.innerPlateL.visible = false; parts.innerPlateR.visible = false;
+                parts.redCube.material.color.setHex(0xdc2626); 
+                updateSpriteText('innerPlateLText', " ", "#ffffff");
+                updateSpriteText('innerPlateRText', " ", "#ffffff");
+                updateSpriteText('innerSolText', " ", "#ffffff");
+                
+                parts.cations.forEach(p => p.mesh.visible = true);
+                parts.anions.forEach(p => p.mesh.visible = true);
+            } else {
+                parts.innerWireL.visible = true; parts.innerWireR.visible = true;
+                parts.innerPlateL.visible = true; parts.innerPlateR.visible = true;
+                parts.innerPlateL.material.color.setHex(data.plateLColor);
+                parts.innerPlateR.material.color.setHex(data.plateRColor);
+                parts.redCube.material.color.setHex(data.solColor); 
+                updateSpriteText('innerPlateLText', data.plateLName, "#ffffff");
+                updateSpriteText('innerPlateRText', data.plateRName, "#ffffff");
+                updateSpriteText('innerSolText', data.solName, "#ffffff");
+
+                parts.cations.forEach(p => p.mesh.visible = false);
+                parts.anions.forEach(p => p.mesh.visible = false);
+            }
+        });
+
+        const tourPanel = document.getElementById('tour-panel');
+        document.getElementById('btn-tour').addEventListener('click', () => {
+            if(animState.isTouring) return;
+            animState.isTouring = true;
+            controls.enabled = false;
+            tourPanel.style.display = 'block';
+
+            function tweenCamera(pos, target, duration) {
+                return new Promise(resolve => {
+                    new TWEEN.Tween(camera.position).to(pos, duration).easing(TWEEN.Easing.Cubic.InOut).start();
+                    new TWEEN.Tween(controls.target).to(target, duration).easing(TWEEN.Easing.Cubic.InOut)
+                        .onComplete(resolve).start();
+                });
+            }
+
+            async function startTour() {
+                tourPanel.innerHTML = "<b>步骤 1/3：物质维度</b><br/>在外界电源驱动下，阳极失电子发生氧化反应，阴极得电子发生还原反应。";
+                animState.flashG1 = true;
+                await tweenCamera({x: -20, y: 2, z: 12}, {x: -7, y: -2, z: 0}, 3000);
+                await new Promise(r => setTimeout(r, 2000));
+
+                tourPanel.innerHTML = "<b>步骤 2/3：装置维度</b><br/>电子由阳极流向正极，再由负极流向阴极。<br/>溶液中阴离子向阳极迁移，阳离子向阴极迁移。";
+                animState.flashG1 = false;
+                animState.electronAnim = true;
+                animState.ionAnim = true;
+                await tweenCamera({x: 0, y: 2, z: 30}, {x: 0, y: 0, z: 3}, 3000);
+                await new Promise(r => setTimeout(r, 3500));
+
+                tourPanel.innerHTML = "<b>步骤 3/3：能量维度</b><br/>体系强行吸收外部电能，将低能态反应物转化为高能态产物（ΔG>0）。";
+                animState.flashG2 = true;
+                await tweenCamera({x: -8, y: 15, z: 30}, {x: -2, y: 5, z: 5}, 3000);
+                await new Promise(r => setTimeout(r, 3500));
+
+                tourPanel.innerHTML = "<b>导览结束</b><br/>您可以切换工业实例模型，体验不同应用场景。";
+                animState.flashG2 = false;
+                await tweenCamera({x: 0, y: 10, z: 48}, {x: 0, y: 2, z: 0}, 2000);
+                
+                setTimeout(() => {
+                    tourPanel.style.display = 'none';
+                    controls.enabled = true;
+                    animState.isTouring = false;
+                }, 1000);
+            }
+            startTour();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 针对手机端触摸的交互逻辑重构 (点击锁定代替悬停)
+        let currentActive = null;
+        let pointerDownX = 0, pointerDownY = 0;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('pointerdown', (e) => {
+            if (!e.isPrimary) return;
+            pointerDownX = e.clientX;
+            pointerDownY = e.clientY;
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!e.isPrimary) return;
+            // 如果点在UI上则忽略
+            if(e.target.closest('#control-panel') || e.target.closest('#ui-layer') || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') return;
+
+            let dx = e.clientX - pointerDownX;
+            let dy = e.clientY - pointerDownY;
+            
+            // 确保是点击而非滑动(允许小范围容差)
+            if(Math.sqrt(dx*dx + dy*dy) < 10) { 
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(interactableObjects);
+                
+                if (intersects.length > 0) {
+                    currentActive = intersects[0].object.userData.name;
+                } else {
+                    currentActive = null; // 点击空白处取消激活
+                }
+            }
+        });
+
+        function applyGlowAnimation(sprite, isGlowing, time) {
+            if(!sprite) return;
+            if(sprite.scale.x < 0.01) return; 
+
+            if (isGlowing) {
+                const flashScale = 1.0 + Math.sin(time * 0.005) * 0.15; 
+                sprite.scale.copy(sprite.userData.baseScale).multiplyScalar(flashScale);
+                if (!sprite.userData.baseColor) sprite.userData.baseColor = sprite.material.color.clone();
+                sprite.material.color.copy(sprite.userData.baseColor).multiplyScalar(2.0); 
+            } else {
+                sprite.scale.lerp(sprite.userData.baseScale, 0.15);
+                if (sprite.userData.baseColor) sprite.material.color.copy(sprite.userData.baseColor);
+            }
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            TWEEN.update(time); 
+
+            if (!animState.isTouring) {
+                animState.redCube = 1.0; animState.blueCube = 1.0; 
+                animState.greenCubeL = 1.0; animState.greenCubeR = 1.0;
+                animState.flashG1 = false; animState.flashG2 = false;
+                animState.ionAnim = false; animState.electronAnim = false;
+                
+                // 应用触摸锁定状态
+                if (currentActive) {
+                    if (currentActive === 'ion_migration_label') animState.ionAnim = true;
+                    else if (currentActive === 'ion_conductor_text') { animState.redCube = 1.05; animState.ionAnim = true; }
+                    else if (currentActive === 'electron_conductor_text') { animState.blueCube = 1.05; animState.electronAnim = true; }
+                    else if (currentActive === 'electron_transfer_label') animState.electronAnim = true;
+                    else if (currentActive === 'neg_material_text') animState.greenCubeL = 1.05;
+                    else if (currentActive === 'pos_material_text') animState.greenCubeR = 1.05;
+                    else if (currentActive === 'g1_label' || currentActive === 'electrode_reactants') animState.flashG1 = true;
+                    else if (currentActive === 'g2_label' || currentActive === 'electrode_products') animState.flashG2 = true;
+                }
+
+                Object.keys(infoCards).forEach(key => {
+                    const card = infoCards[key];
+                    const isTarget = (key === 'migration' && currentActive === 'ion_migration_label') ||
+                                     (key === 'ionConductor' && currentActive === 'ion_conductor_text') ||
+                                     (key === 'elecConductor' && currentActive === 'electron_conductor_text') ||
+                                     (key === 'transfer' && currentActive === 'electron_transfer_label') ||
+                                     (key === 'anodeMat' && currentActive === 'neg_material_text') ||
+                                     (key === 'cathodeMat' && currentActive === 'pos_material_text');
+                    
+                    const targetOpacity = isTarget ? 1 : 0;
+                    card.material.opacity += (targetOpacity - card.material.opacity) * 0.1;
+                    const bs = card.userData.baseScale;
+                    const expand = card.material.opacity * 0.5;
+                    card.scale.set(bs.x + expand, bs.y + expand * (bs.y/bs.x), 1); 
+                });
+            }
+
+            parts.redCube.scale.lerp(new THREE.Vector3(animState.redCube, animState.redCube, animState.redCube), 0.15);
+            parts.blueCube.scale.lerp(new THREE.Vector3(animState.blueCube, animState.blueCube, animState.blueCube), 0.15);
+            parts.greenCubeL.scale.lerp(new THREE.Vector3(animState.greenCubeL, animState.greenCubeL, animState.greenCubeL), 0.15);
+            parts.greenCubeR.scale.lerp(new THREE.Vector3(animState.greenCubeR, animState.greenCubeR, animState.greenCubeR), 0.15);
+
+            applyGlowAnimation(parts.oxidant, animState.flashG1, time);
+            applyGlowAnimation(parts.reductant, animState.flashG1, time);
+            applyGlowAnimation(parts.eq_oxidant, animState.flashG1, time);    
+            applyGlowAnimation(parts.eq_reductant, animState.flashG1, time);  
+
+            applyGlowAnimation(parts.ox_product, animState.flashG2, time);
+            applyGlowAnimation(parts.red_product, animState.flashG2, time);
+            applyGlowAnimation(parts.eq_ox_product, animState.flashG2, time); 
+            applyGlowAnimation(parts.eq_red_product, animState.flashG2, time);
+            applyGlowAnimation(parts.eq_g_diff, animState.flashG2, time);     
+            applyGlowAnimation(parts.eq_elec_energy, animState.flashG2 || animState.flashG1, time); 
+
+            if (animState.currentModel === 'abstract') {
+                const flowSpeedMultiplier = (animState.ionAnim || animState.isTouring) ? 1.5 : 0.05; 
+                parts.cations.forEach(p => {
+                    p.mesh.position.x += p.speed * flowSpeedMultiplier * 5; 
+                    if (p.mesh.position.x > 2.8) { p.mesh.position.x = -2.8; } 
+                });
+                parts.anions.forEach(p => {
+                    p.mesh.position.x -= p.speed * flowSpeedMultiplier * 5; 
+                    if (p.mesh.position.x < -2.8) { p.mesh.position.x = 2.8; }
+                });
+            }
+
+            if (animState.ionAnim) {
+                const offset = (time * 0.0005) % 1.0;
+                parts.anion_text.position.x = -0.5 - offset * 2; 
+                parts.cation_text.position.x = 0.5 + offset * 2; 
+            } else {
+                parts.anion_text.position.x = -0.5;
+                parts.cation_text.position.x = 0.5;
+            }
+
+            const eCycle = time * 0.0015; 
+            parts.electrons.forEach(e => {
+                if (animState.electronAnim || animState.isTouring) {
+                    e.mesh.visible = true;
+                    let progress = (eCycle + e.offset) % 1;
+                    if (e.pathIdx === 1) { 
+                        e.mesh.position.lerpVectors(parts.pAnodeTop, parts.pPowerPos, progress);
+                    } else { 
+                        e.mesh.position.lerpVectors(parts.pPowerNeg, parts.pCathodeTop, progress);
+                    }
+                } else {
+                    e.mesh.visible = false;
+                }
+            });
+
+            controls.update(); 
+            composer.render();
+        }
+        
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
