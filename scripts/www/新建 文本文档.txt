@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>电解熔融氧化铝 - AR互动实验室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f3f4f6; color: #1f2937; font-family: sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        .glass-panel { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(6px); border: 1px solid rgba(0, 0, 0, 0.05); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        .crisis-overlay { background: rgba(220, 38, 38, 0.2); animation: pulse-red 1s infinite; pointer-events: none; }
+        @keyframes pulse-red { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.4; } }
+        
+        #tooltip { position: fixed; pointer-events: none; background: rgba(17, 24, 39, 0.85); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; z-index: 50; transform: translate(-50%, -150%); box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap; transition: opacity 0.15s ease; }
+        #tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -4px; border-width: 4px; border-style: solid; border-color: rgba(17, 24, 39, 0.85) transparent transparent transparent; }
+    </style>
+</head>
+<body>
+
+    <div id="alarm-overlay" class="absolute inset-0 z-0 hidden crisis-overlay"></div>
+    <div id="tooltip" class="opacity-0 hidden"></div>
+
+    <div class="absolute inset-0 pointer-events-none z-10">
+        
+        <div class="absolute top-2 left-2 pointer-events-auto flex flex-col gap-2">
+            <div class="glass-panel px-3 py-2 rounded-md w-40">
+                <h1 class="text-sm font-bold text-blue-600 tracking-wider border-b border-gray-200 pb-1 mb-1">电解中控系统</h1>
+                <div class="flex justify-between items-center text-[10px] font-mono">
+                    <span class="text-gray-600 font-bold">槽电压</span>
+                    <span id="voltage-txt" class="text-green-600 font-bold">4.2 V</span>
+                </div>
+                <div class="mt-1">
+                    <div class="flex justify-between text-[9px] mb-0.5 text-gray-500"><span>氧化铝浓度</span><span id="conc-txt">100%</span></div>
+                    <div class="w-full bg-gray-300 h-1.5 rounded-full overflow-hidden">
+                        <div id="conc-bar" class="bg-blue-500 h-full transition-all duration-300" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+            <button id="btn-feed" class="px-3 py-1.5 bg-orange-500 text-white rounded-md font-bold shadow transition-all active:bg-orange-400 text-[11px] border border-orange-400 flex justify-center items-center gap-1 hidden">
+                🔨 打壳并添加氧化铝
+            </button>
+        </div>
+
+        <div id="quest-banner" class="opacity-0 hidden absolute top-4 left-1/2 transform -translate-x-1/2 bg-indigo-600 text-white px-5 py-2 rounded-xl font-bold shadow-[0_0_15px_rgba(79,70,229,0.6)] border border-white z-50 pointer-events-auto transition-opacity duration-300 flex flex-col items-center">
+            <div class="text-[10px] text-indigo-200 mb-1">技工考核任务 (剩 <span id="quest-time" class="text-white text-xs">30</span> 秒)</div>
+            <div class="flex gap-4 text-xs">
+                <span id="quest-al">提取液态铝: 0 / 3</span>
+                <span id="quest-o2">生成氧气: 0 / 2</span>
+            </div>
+        </div>
+
+        <div id="info-panel" class="absolute top-2 right-2 pointer-events-auto flex flex-col gap-1.5 transition-opacity duration-500 opacity-0 hidden">
+            <div class="glass-panel p-2 rounded-md text-[10px] font-mono w-36">
+                <div class="text-gray-700 font-bold border-b border-gray-200 pb-0.5 mb-1">反应式</div>
+                <div class="text-red-600 leading-tight">阳: 2O²⁻-4e⁻=O₂↑</div>
+                <div class="text-blue-600 leading-tight">阴: Al³⁺+3e⁻=Al</div>
+                <div class="text-gray-600 mt-1 border-t border-gray-200 pt-0.5 leading-tight">总: 2Al₂O₃=4Al+3O₂↑</div>
+            </div>
+            <div class="glass-panel p-2 rounded-md text-[10px] w-36">
+                <div class="text-gray-700 font-bold border-b border-gray-200 pb-0.5 mb-1">图例</div>
+                <div class="grid grid-cols-2 gap-1.5 text-gray-800">
+                    <div class="flex items-center gap-1"><div class="w-2.5 h-2.5 rounded-full bg-[#BFA6A6]"></div> Al³⁺</div>
+                    <div class="flex items-center gap-1"><div class="w-2.5 h-2.5 rounded-full bg-[#FF0D0D]"></div> O²⁻</div>
+                    <div class="flex items-center gap-1"><div class="flex"><div class="w-2 h-2 rounded-full bg-[#FF0D0D] -mr-0.5 z-10"></div><div class="w-2 h-2 rounded-full bg-[#FF0D0D] z-20"></div></div> O₂</div>
+                    <div class="flex items-center gap-1"><div class="w-2.5 h-2.5 rounded-full bg-[#90E050]"></div> [AlF₆]³⁻</div>
+                    <div class="flex items-center gap-1"><div class="w-2.5 h-2.5 rounded-full bg-[#AB5CF2]"></div> Na⁺</div>
+                    <div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-yellow-400"></div> e⁻</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 pointer-events-auto flex gap-1.5 p-1.5 glass-panel rounded-full items-center">
+            <button id="btn-macro" class="px-4 py-2 bg-blue-600 text-white rounded-full font-bold shadow transition-all text-xs">宏观</button>
+            <button id="btn-micro" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-full font-bold shadow transition-all active:bg-gray-300 text-xs">微观</button>
+            <button id="btn-interactive" class="px-4 py-2 bg-purple-100 text-purple-700 border border-purple-300 rounded-full font-bold shadow transition-all active:bg-purple-200 text-xs whitespace-nowrap">考核闯关</button>
+            <div class="w-px h-5 bg-gray-300 mx-0.5"></div>
+            <button id="btn-playpause" class="px-6 py-2 bg-green-500 text-white rounded-full font-bold shadow transition-all active:bg-green-400 text-xs w-16 text-center">开始</button>
+        </div>
+
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        // --------------------------------------------------------
+        // 0. 程序化音频系统与震动 (Haptics & Audio)
+        // --------------------------------------------------------
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        let alarmInterval = null;
+
+        function playSound(type, freq, duration, vol, sweepTo) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            if(sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, audioCtx.currentTime + duration);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playSpark() { playSound('sawtooth', 800, 0.15, 0.1, 100); if(navigator.vibrate) navigator.vibrate(30); }
+        function playDrop() { playSound('sine', 400, 0.2, 0.1, 200); if(navigator.vibrate) navigator.vibrate([15, 30, 15]); }
+        function playAlarmBeep() { playSound('square', 600, 0.3, 0.05); if(navigator.vibrate) navigator.vibrate(50); }
+        function playSuccess() { 
+            playSound('sine', 440, 0.1, 0.1); 
+            setTimeout(()=>playSound('sine', 554, 0.1, 0.1), 100);
+            setTimeout(()=>playSound('sine', 659, 0.3, 0.1), 200);
+            if(navigator.vibrate) navigator.vibrate([50, 50, 50, 50, 100]);
+        }
+
+        // --------------------------------------------------------
+        // 1. 全局状态与 Three.js 初始化
+        // --------------------------------------------------------
+        if (window._aluminaAnimId) cancelAnimationFrame(window._aluminaAnimId);
+        
+        window.isPlaying = false; window.hasPower = false; window.powerT = 0.0; 
+        window.viewMode = 'macro'; 
+        
+        // 危机与任务状态
+        let aluminaConc = 1.0; 
+        let isAnodeEffect = false;
+        let questActive = false;
+        let questAl = 0, questO2 = 0, questTime = 30;
+        let questInterval = null;
+
+        const container = document.getElementById('canvas-container');
+        container.innerHTML = ''; 
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf3f4f6);
+        scene.fog = new THREE.FogExp2(0xf3f4f6, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(15, 12, 35);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+        renderer.shadowMap.enabled = true;
+        // 开启 AR 支持
+        renderer.xr.enabled = true;
+        container.appendChild(renderer.domElement);
+        // 添加 AR 按钮到 body
+        document.body.appendChild( ARButton.createButton( renderer ) );
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05; controls.maxPolarAngle = Math.PI / 2 + 0.1; controls.target.set(0, 4, 0);
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(-9999, -9999);
+        const tooltip = document.getElementById('tooltip');
+        let hideTooltipTimeout = null;
+
+        function updateMouseAndTooltip(clientX, clientY, isTouch) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            tooltip.style.left = clientX + 'px';
+            tooltip.style.top = (clientY - (isTouch ? 30 : 0)) + 'px';
+            if(hideTooltipTimeout) clearTimeout(hideTooltipTimeout);
+        }
+        window.addEventListener('pointermove', (e) => updateMouseAndTooltip(e.clientX, e.clientY, e.pointerType === 'touch'));
+        window.addEventListener('pointerdown', (e) => updateMouseAndTooltip(e.clientX, e.clientY, e.pointerType === 'touch'));
+        window.addEventListener('pointerup', (e) => {
+            if (e.pointerType === 'touch') {
+                hideTooltipTimeout = setTimeout(() => { mouse.x = -9999; mouse.y = -9999; tooltip.classList.add('opacity-0'); }, 1500);
+            }
+        });
+
+        // --------------------------------------------------------
+        // 2. 光照与材质
+        // --------------------------------------------------------
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(15, 30, 15); scene.add(dirLight);
+        const heatLight = new THREE.PointLight(0xff6600, 1.2, 25); heatLight.position.set(0, 3, 0); scene.add(heatLight);
+
+        const hotColor = new THREE.Color(0xff5500); const coldColor = new THREE.Color(0x666666); const errorColor = new THREE.Color(0xff0000);
+        const emissiveHot = new THREE.Color(0x220500); const emissiveCold = new THREE.Color(0x000000); const emissiveError = new THREE.Color(0x660000);
+
+        const materials = {
+            steel: new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.8, roughness: 0.4 }),
+            carbonCathode: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 }),
+            carbonAnode: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 }),
+            aluminumLiquid: new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 1.0, roughness: 0.2 }),
+            electrolyteMacro: new THREE.MeshPhysicalMaterial({ color: coldColor.clone(), emissive: emissiveCold.clone(), roughness: 0.2, transmission: 0.1, transparent: true, depthWrite: false }),
+            crust: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1.0 }),
+            wireRed: new THREE.MeshStandardMaterial({ color: 0xcc2222 }),
+            wireBlack: new THREE.MeshStandardMaterial({ color: 0x111111 })
+        };
+
+        // --------------------------------------------------------
+        // 3. 构建模型
+        // --------------------------------------------------------
+        const worldGroup = new THREE.Group(); // AR 容纳器
+        // 为了在 AR 中放置在身前，做适度缩放和位移 (仅在AR模式下有效，由WebXR接管相机)
+        worldGroup.position.set(0, -1, -4); 
+        worldGroup.scale.setScalar(0.2); 
+        scene.add(worldGroup);
+
+        // 我们依然将所有物体添加到 scene 中以保持普通模式的完美运作，当进入 AR 时，Threejs XRManager会处理视角。
+        // 但为了代码一致性，我们直接添加到 scene。
+
+        const cellGroup = new THREE.Group(); scene.add(cellGroup);
+        const cellWidth = 12, cellHeight = 6, cellDepth = 8, wallThickness = 0.5;
+        
+        [
+            {pos: [0, cellHeight/2, -cellDepth/2 + wallThickness/2], geom: [cellWidth, cellHeight, wallThickness], name: "槽内壁-阴极"},
+            {pos: [0, cellHeight/2, cellDepth/2 - wallThickness/2], geom: [cellWidth, cellHeight, wallThickness], name: "槽内壁-阴极"},
+            {pos: [-cellWidth/2 + wallThickness/2, cellHeight/2, 0], geom: [wallThickness, cellHeight, cellDepth - wallThickness*2], name: "槽内壁-阴极"},
+            {pos: [cellWidth/2 - wallThickness/2, cellHeight/2, 0], geom: [wallThickness, cellHeight, cellDepth - wallThickness*2], name: "槽内壁-阴极"},
+            {pos: [0, wallThickness/2, 0], geom: [cellWidth, wallThickness, cellDepth], name: "槽底-阴极"}
+        ].forEach(w => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...w.geom), materials.carbonCathode);
+            mesh.position.set(...w.pos); mesh.userData.name = w.name; cellGroup.add(mesh);
+        });
+
+        const alPoolHeight = 1.2, electroHeight = 3.5;
+        const alPoolGeom = new THREE.BoxGeometry(cellWidth-1, alPoolHeight, cellDepth-1, 12, 1, 12);
+        const alPool = new THREE.Mesh(alPoolGeom, materials.aluminumLiquid); alPool.position.set(0, wallThickness + alPoolHeight/2, 0); alPool.userData.name = "液态铝"; cellGroup.add(alPool); alPool.renderOrder = 1; 
+        
+        const alPosAttr = alPoolGeom.attributes.position; alPoolGeom.userData.baseY = new Float32Array(alPosAttr.count);
+        for(let i=0; i<alPosAttr.count; i++) alPoolGeom.userData.baseY[i] = alPosAttr.getY(i);
+
+        const electrolyte = new THREE.Mesh(new THREE.BoxGeometry(cellWidth-1, electroHeight, cellDepth-1), materials.electrolyteMacro); electrolyte.position.set(0, wallThickness + alPoolHeight + electroHeight/2, 0); electrolyte.userData.name = "熔融电解质"; cellGroup.add(electrolyte); electrolyte.renderOrder = 10; 
+        const crust = new THREE.Mesh(new THREE.BoxGeometry(cellWidth-1, 0.2, cellDepth-1), materials.crust); crust.position.set(0, wallThickness + alPoolHeight + electroHeight + 0.1, 0); crust.userData.name = "表面结壳"; cellGroup.add(crust); crust.renderOrder = 10; 
+
+        const anodeGroup = new THREE.Group(); scene.add(anodeGroup);
+        const anodePositions = [-3.5, 0, 3.5]; const anodes = []; 
+        anodePositions.forEach(x => {
+            const anode = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), materials.carbonAnode); anode.position.set(x, wallThickness + alPoolHeight + electroHeight - 0.5, 0); anode.userData.name = "碳块-阳极"; anode.renderOrder = 2; anodeGroup.add(anode); anodes.push(anode);
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3.5), materials.steel); rod.position.set(x, anode.position.y + 1.75, 0); rod.userData.name = "金属导电杆"; anodeGroup.add(rod);
+        });
+
+        const busbarY = wallThickness + alPoolHeight + electroHeight + 4.2;
+        const busbar = new THREE.Mesh(new THREE.BoxGeometry(10, 0.5, 0.5), materials.steel); busbar.position.set(0, busbarY, 0); busbar.userData.name = "阳极母线"; anodeGroup.add(busbar);
+
+        scene.traverse(obj => { if (obj.isMesh) obj.frustumCulled = false; });
+
+        const powerY = 13.5;
+        const powerBox = new THREE.Mesh(new THREE.BoxGeometry(5, 2.5, 2.5), materials.powerSupplyBody); powerBox.position.set(0, powerY, 0); powerBox.userData.name = "直流稳压电源"; scene.add(powerBox);
+        
+        // 导线
+        const wireRed = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(1.5, powerY - 1.25, 0), new THREE.Vector3(2.5, powerY - 2, 0), new THREE.Vector3(2.5, busbarY + 1, 0), new THREE.Vector3(1.5, busbarY + 0.25, 0)]), 20, 0.04, 8, false), materials.wireRed); wireRed.userData.name = "正极导线"; scene.add(wireRed);
+        const wireBlack = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-1.5, powerY - 1.25, 0), new THREE.Vector3(-3.5, powerY - 1.5, 0), new THREE.Vector3(-7, busbarY, 0), new THREE.Vector3(-6.5, cellHeight/2, 0)]), 30, 0.04, 8, false), materials.wireBlack); wireBlack.userData.name = "负极导线"; scene.add(wireBlack);
+
+        // --------------------------------------------------------
+        // 4. 微观粒子系统
+        // --------------------------------------------------------
+        const particlesGroup = new THREE.Group(); scene.add(particlesGroup); particlesGroup.visible = false; 
+
+        const matAl = new THREE.MeshStandardMaterial({ color: 0xBFA6A6, roughness: 0.4, metalness: 0.1 });
+        const matO = new THREE.MeshStandardMaterial({ color: 0xFF0D0D, roughness: 0.5 });
+        const matF = new THREE.MeshStandardMaterial({ color: 0x90E050, roughness: 0.5 });
+        const matNa = new THREE.MeshStandardMaterial({ color: 0xAB5CF2, roughness: 0.5 });
+        const matElectron = new THREE.MeshBasicMaterial({ color: 0xffff00 }); 
+        const matAlMetal = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1.0, roughness: 0.1 });
+
+        const geomIonAl3 = new THREE.SphereGeometry(0.18, 16, 16);
+        const geomIonO2 = new THREE.SphereGeometry(0.16, 16, 16);
+        const geomElectron = new THREE.SphereGeometry(0.08, 8, 8);
+
+        const alIons = [], oIons = [], naIons = [], alf6Ions = [], reactionElectrons = [], o2Pool = [];
+        const eYMin = wallThickness + alPoolHeight, eYMax = wallThickness + alPoolHeight + electroHeight, eXMin = -5, eXMax = 5, eZMin = -3, eZMax = 3;
+
+        const anodeSites = [];
+        anodePositions.forEach(ax => { for(let i=0; i<8; i++) anodeSites.push({ x: ax + (Math.random()-0.5)*1.5, y: eYMax - 0.7, z: (Math.random()-0.5)*1.5, count: 0, oxIons: [] }); });
+
+        function createIonAl3() { let m = new THREE.Mesh(geomIonAl3, matAl); m.userData.name = "Al³⁺"; return m; }
+        function createIonO2() { let m = new THREE.Mesh(geomIonO2, matO); m.userData.name = "O²⁻"; return m; }
+        function createReactionElectron() { let m = new THREE.Mesh(geomElectron, matElectron); m.userData.name = "e⁻"; return m; }
+        function createMoleculeO2() { const g = new THREE.Group(); g.userData.name = "O₂"; const o1 = new THREE.Mesh(geomIonO2, matO); o1.position.x=0.12; const o2=new THREE.Mesh(geomIonO2, matO); o2.position.x=-0.12; g.add(o1,o2); return g; }
+
+        for(let i=0; i<20; i++) { let m = createIonAl3(); m.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), THREE.MathUtils.randFloat(eYMin, eYMax), THREE.MathUtils.randFloat(eZMin, eZMax)); alIons.push({ mesh: m, speed: THREE.MathUtils.randFloat(0.0075, 0.0125), state: 'falling', timer: 0 }); particlesGroup.add(m); }
+        for(let i=0; i<20; i++) { let m = createIonO2(); m.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), THREE.MathUtils.randFloat(eYMin, eYMax), THREE.MathUtils.randFloat(eZMin, eZMax)); oIons.push({ mesh: m, speed: THREE.MathUtils.randFloat(0.0075, 0.0125), state: 'rising', targetSite: null }); particlesGroup.add(m); }
+        for(let i=0; i<20; i++) { let m = createMoleculeO2(); m.visible = false; o2Pool.push({ mesh: m, active: false, speed: THREE.MathUtils.randFloat(0.015, 0.025) }); particlesGroup.add(m); }
+
+        const externalElectrons = [];
+        for(let i=0; i<20; i++) { let m = new THREE.Mesh(geomElectron, matElectron); m.userData.name = "e⁻"; externalElectrons.push({ mesh: m, progress: Math.random(), type: Math.random() > 0.5 ? 'cathode' : 'anode' }); scene.add(m); }
+
+        // --------------------------------------------------------
+        // 5. 危机处理与互动逻辑 (上帝之手 & 加料)
+        // --------------------------------------------------------
+        const btnFeed = document.getElementById('btn-feed');
+        btnFeed.addEventListener('click', () => {
+            if(window.hasPower) {
+                aluminaConc = 1.0;
+                isAnodeEffect = false;
+                document.getElementById('alarm-overlay').classList.add('hidden');
+                document.getElementById('voltage-txt').innerText = "4.2 V";
+                document.getElementById('voltage-txt').className = "text-green-600 font-bold";
+                btnFeed.classList.add('hidden');
+                playSuccess();
+            }
+        });
+
+        let draggedObj = null;
+        const dragPlane = new THREE.Plane();
+        
+        window.addEventListener('pointerdown', (e) => {
+            if (window.viewMode !== 'interactive' || window.powerT < 0.5) return;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(particlesGroup.children, true);
+            for(let hit of intersects) {
+                let name = hit.object.userData.name || "";
+                if(name.includes("O²⁻") || name.includes("Al³⁺")) {
+                    let isFree = false;
+                    if(name.includes("O²⁻")) { const ion = oIons.find(i => i.mesh === hit.object); if(ion && ion.state === 'rising') isFree = true; } 
+                    else { const ion = alIons.find(i => i.mesh === hit.object); if(ion && ion.state === 'falling') isFree = true; }
+                    if(isFree) {
+                        draggedObj = hit.object; controls.enabled = false;
+                        camera.getWorldDirection(dragPlane.normal); dragPlane.setFromNormalAndCoplanarPoint(dragPlane.normal, draggedObj.position);
+                        if(audioCtx.state === 'suspended') audioCtx.resume();
+                        break;
+                    }
+                }
+            }
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if(draggedObj) {
+                raycaster.setFromCamera(mouse, camera); const target = new THREE.Vector3(); raycaster.ray.intersectPlane(dragPlane, target);
+                if(target) { target.x = Math.max(eXMin, Math.min(eXMax, target.x)); target.y = Math.max(eYMin, Math.min(eYMax, target.y)); target.z = Math.max(eZMin, Math.min(eZMax, target.z)); draggedObj.position.copy(target); }
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if(draggedObj) {
+                let name = draggedObj.userData.name || "";
+                if(name.includes("O²⁻")) {
+                    for(let ion of oIons) {
+                        if(ion.mesh !== draggedObj && ion.state === 'rising' && draggedObj.position.distanceTo(ion.mesh.position) < 1.5) {
+                            triggerManualO2Fusion(draggedObj, ion.mesh); break;
+                        }
+                    }
+                } else if (name.includes("Al³⁺")) {
+                    if(draggedObj.position.y < eYMin + 1.2) triggerManualAlDeposition(draggedObj);
+                }
+                draggedObj = null; controls.enabled = true;
+            }
+        });
+
+        function triggerManualO2Fusion(m1, m2) {
+            const ion1 = oIons.find(i => i.mesh === m1); const ion2 = oIons.find(i => i.mesh === m2);
+            ion1.state = 'binding'; ion2.state = 'binding';
+            const mid = m1.position.clone().add(m2.position).multiplyScalar(0.5);
+            m1.position.set(mid.x - 0.15, mid.y, mid.z); m2.position.set(mid.x + 0.15, mid.y, mid.z);
+            for(let j=0; j<4; j++) {
+                let el = createReactionElectron(); el.position.copy(mid); el.userData = { target: null, progress: 0, dir: new THREE.Vector3((Math.random()-0.5)*0.4, 1, (Math.random()-0.5)*0.4) }; reactionElectrons.push(el); particlesGroup.add(el);
+            }
+            let o2 = o2Pool.find(m => !m.active); if(o2) { o2.active = true; o2.mesh.visible = true; o2.mesh.position.copy(mid); }
+            
+            playSpark();
+            if(questActive) { questO2++; document.getElementById('quest-o2').innerText = `生成氧气: ${questO2} / 2`; checkQuest(); }
+
+            setTimeout(() => {
+                ion1.state = 'rising'; ion2.state = 'rising';
+                ion1.mesh.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), eYMin, THREE.MathUtils.randFloat(eZMin, eZMax));
+                ion2.mesh.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), eYMin, THREE.MathUtils.randFloat(eZMin, eZMax));
+            }, 500);
+        }
+
+        function triggerManualAlDeposition(m) {
+            const ion = alIons.find(i => i.mesh === m);
+            if(ion) {
+                ion.state = 'receiving_electrons'; ion.timer = 0;
+                for(let j=0; j<3; j++) {
+                    const el = createReactionElectron(); el.position.set(ion.mesh.position.x + (Math.random()-0.5)*1.5, eYMin - 0.2, ion.mesh.position.z + (Math.random()-0.5)*1.5);
+                    el.userData = { target: ion.mesh, progress: 0, speed: 0.01 + Math.random()*0.005 }; reactionElectrons.push(el); particlesGroup.add(el);
+                }
+                playDrop();
+                if(questActive) { questAl++; document.getElementById('quest-al').innerText = `提取液态铝: ${questAl} / 3`; checkQuest(); }
+            }
+        }
+
+        function checkQuest() {
+            if(questAl >= 3 && questO2 >= 2) {
+                questActive = false; clearInterval(questInterval);
+                document.getElementById('quest-banner').innerHTML = `<div class="text-sm font-bold text-green-300">🎉 考核通过！优秀技工！</div>`;
+                playSuccess();
+            }
+        }
+
+        // --------------------------------------------------------
+        // 6. UI 视图切换
+        // --------------------------------------------------------
+        const btnMacro = document.getElementById('btn-macro'), btnMicro = document.getElementById('btn-micro'), btnInteractive = document.getElementById('btn-interactive'), btnPlayPause = document.getElementById('btn-playpause');
+        const infoPanel = document.getElementById('info-panel'), interactiveBanner = document.getElementById('interactive-banner'), questBanner = document.getElementById('quest-banner');
+
+        btnPlayPause.addEventListener('click', () => {
+            window.isPlaying = !window.isPlaying; window.hasPower = window.isPlaying; 
+            btnPlayPause.innerText = window.isPlaying ? "暂停" : "开始";
+            btnPlayPause.className = window.isPlaying ? "px-6 py-1.5 bg-yellow-500 text-gray-900 rounded-full font-bold shadow transition-all active:bg-yellow-400 text-xs w-16 text-center" : "px-6 py-1.5 bg-green-500 text-white rounded-full font-bold shadow transition-all active:bg-green-400 text-xs w-16 text-center";
+            if(!window.isPlaying && alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; }
+            if(window.isPlaying && isAnodeEffect && !alarmInterval) alarmInterval = setInterval(playAlarmBeep, 600);
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+        });
+
+        function updateView() {
+            const normalCls = "px-4 py-1.5 bg-gray-200 text-gray-700 rounded-full font-bold shadow transition-all active:bg-gray-300 text-xs";
+            const activeCls = "px-4 py-1.5 bg-blue-600 text-white rounded-full font-bold shadow transition-all text-xs";
+            
+            btnMacro.className = window.viewMode === 'macro' ? activeCls : normalCls;
+            btnMicro.className = window.viewMode === 'micro' ? activeCls : normalCls;
+            btnInteractive.className = window.viewMode === 'interactive' ? "px-4 py-1.5 bg-indigo-600 text-white border border-indigo-500 rounded-full font-bold shadow-[0_0_10px_indigo] transition-all text-xs whitespace-nowrap" : "px-4 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-full font-bold shadow transition-all active:bg-indigo-200 text-xs whitespace-nowrap";
+
+            if(window.viewMode === 'macro') { infoPanel.classList.add('opacity-0'); setTimeout(() => { if(window.viewMode === 'macro') infoPanel.classList.add('hidden'); }, 500); } 
+            else { infoPanel.classList.remove('hidden'); void infoPanel.offsetWidth; infoPanel.classList.remove('opacity-0'); }
+
+            if(window.viewMode === 'interactive') {
+                interactiveBanner.classList.remove('hidden'); void interactiveBanner.offsetWidth; interactiveBanner.classList.remove('opacity-0');
+                questBanner.classList.remove('hidden'); void questBanner.offsetWidth; questBanner.classList.remove('opacity-0');
+                // Reset Quest
+                questActive = true; questAl = 0; questO2 = 0; questTime = 30;
+                document.getElementById('quest-al').innerText = `提取液态铝: 0 / 3`; document.getElementById('quest-o2').innerText = `生成氧气: 0 / 2`;
+                if(questInterval) clearInterval(questInterval);
+                questInterval = setInterval(() => {
+                    questTime--; document.getElementById('quest-time').innerText = questTime;
+                    if(questTime <= 0) { questActive = false; clearInterval(questInterval); document.getElementById('quest-banner').innerHTML = `<div class="text-sm font-bold text-red-300">❌ 考核失败，时间到！</div>`; playSound('sawtooth', 150, 0.5, 0.1); }
+                }, 1000);
+            } else {
+                interactiveBanner.classList.add('opacity-0'); questBanner.classList.add('opacity-0');
+                setTimeout(() => { if(window.viewMode !== 'interactive') { interactiveBanner.classList.add('hidden'); questBanner.classList.add('hidden'); } }, 300);
+                if(questInterval) clearInterval(questInterval);
+            }
+
+            const isMacro = window.viewMode === 'macro';
+            frontWall.visible = isMacro; crust.visible = isMacro;
+            
+            const wallOpacity = isMacro ? 1.0 : 0.05;
+            [leftWall, rightWall, backWall, bottomWall].forEach(w => { w.material.transparent = !isMacro; w.material.opacity = wallOpacity; w.material.depthWrite = false; });
+            
+            electrolyte.material.transmission = isMacro ? 0.1 : 1.0; electrolyte.material.opacity = isMacro ? 1.0 : 0.1; electrolyte.material.depthWrite = false;
+            alPool.material.transparent = !isMacro; alPool.material.opacity = isMacro ? 1.0 : 0.7; alPool.material.depthWrite = true; 
+            anodes.forEach(a => { a.material.transparent = !isMacro; a.material.opacity = isMacro ? 1.0 : 0.7; a.material.depthWrite = true; });
+            particlesGroup.visible = !isMacro;
+
+            if (isMacro) gsapCameraTo(15, 12, 35, 0, 4, 0); else gsapCameraTo(0, 9, 13, 0, 4, 0); 
+        }
+
+        btnMacro.addEventListener('click', () => { window.viewMode = 'macro'; updateView(); });
+        btnMicro.addEventListener('click', () => { window.viewMode = 'micro'; updateView(); });
+        btnInteractive.addEventListener('click', () => { 
+            window.viewMode = 'interactive'; window.isPlaying = true; window.hasPower = true;
+            btnPlayPause.innerText="暂停"; btnPlayPause.className="px-6 py-1.5 bg-yellow-500 text-gray-900 rounded-full font-bold shadow transition-all active:bg-yellow-400 text-xs w-16 text-center"; 
+            updateView(); 
+        });
+
+        function gsapCameraTo(x, y, z, tx, ty, tz) {
+            const startPos = camera.position.clone(), endPos = new THREE.Vector3(x, y, z);
+            const startTarget = controls.target.clone(), endTarget = new THREE.Vector3(tx, ty, tz);
+            let p = 0; const anim = () => { p += 0.03; if(p <= 1) { const e = 1 - Math.pow(1 - p, 3); camera.position.lerpVectors(startPos, endPos, e); controls.target.lerpVectors(startTarget, endTarget, e); requestAnimationFrame(anim); } }; anim();
+        }
+
+        // --------------------------------------------------------
+        // 7. 动画主循环
+        // --------------------------------------------------------
+        function animate() {
+            renderer.setAnimationLoop( render ); // 兼容 WebXR
+        }
+
+        function render() {
+            controls.update();
+
+            // --- 危机模拟：消耗与阳极效应 ---
+            if (window.isPlaying && window.viewMode !== 'interactive') {
+                aluminaConc = Math.max(0.0, aluminaConc - 0.0005);
+                document.getElementById('conc-bar').style.width = (aluminaConc * 100) + '%';
+                
+                if (aluminaConc < 0.15 && !isAnodeEffect) {
+                    isAnodeEffect = true;
+                    document.getElementById('alarm-overlay').classList.remove('hidden');
+                    document.getElementById('voltage-txt').innerText = "38.5 V 飙升!";
+                    document.getElementById('voltage-txt').className = "text-red-600 font-bold animate-pulse";
+                    btnFeed.classList.remove('hidden');
+                    if(!alarmInterval) alarmInterval = setInterval(playAlarmBeep, 600);
+                }
+            }
+
+            if (window.hasPower && window.powerT < 1.0) window.powerT += 0.01;
+            if (!window.hasPower && window.powerT > 0.0) window.powerT -= 0.01;
+
+            const curColor = isAnodeEffect ? errorColor : hotColor;
+            const curEmissive = isAnodeEffect ? emissiveError : emissiveHot;
+
+            heatLight.intensity = (isAnodeEffect ? 3.0 : 1.2) * window.powerT;
+            heatLight.color.lerpColors(new THREE.Color(0xff6600), errorColor, isAnodeEffect ? 1 : 0);
+            materials.electrolyteMacro.color.lerpColors(coldColor, curColor, window.powerT);
+            materials.electrolyteMacro.emissive.lerpColors(emissiveCold, curEmissive, window.powerT);
+
+            const time = Date.now() * 0.004;
+            for(let i=0; i<alPosAttr.count; i++) {
+                if (alPoolGeom.userData.baseY[i] > 0.5) { 
+                    const x = alPosAttr.getX(i); const z = alPosAttr.getZ(i);
+                    const wave = (Math.sin(x * 1.5 + time) + Math.cos(z * 1.5 + time * 0.8)) * (isAnodeEffect ? 0.15 : 0.08) * window.powerT;
+                    alPosAttr.setY(i, alPoolGeom.userData.baseY[i] + wave);
+                }
+            }
+            alPosAttr.needsUpdate = true;
+
+            // 射线提示
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            let foundName = null; let macroName = null;
+            for (let i = 0; i < intersects.length; i++) {
+                let obj = intersects[i].object; let isVisible = true; let curr = obj;
+                while (curr) { if (!curr.visible) { isVisible = false; break; } curr = curr.parent; }
+                if (!isVisible) continue;
+                let objName = obj.userData.name || (obj.parent && obj.parent.userData.name);
+                if (objName) {
+                    if (objName.includes("Al") || objName.includes("O²") || objName.includes("e⁻") || objName.includes("O₂") || objName.includes("Na")) {
+                        if (window.viewMode !== 'macro') { foundName = objName; break; }
+                    } else if (!macroName) { macroName = objName; }
+                }
+            }
+            foundName = foundName || macroName;
+            if(window.powerT < 0.2 && foundName && window.viewMode !== 'macro') foundName += " (冻结固化)";
+            if (foundName && !draggedObj) { tooltip.innerText = foundName; tooltip.classList.remove('hidden'); tooltip.classList.remove('opacity-0'); } 
+            else { tooltip.classList.add('opacity-0'); tooltip.classList.add('hidden'); }
+
+            const autoMove = window.isPlaying && window.viewMode !== 'interactive' && !isAnodeEffect;
+
+            if (window.viewMode !== 'macro') {
+                alIons.forEach(ion => {
+                    if (ion.state === 'falling') {
+                        if (autoMove && ion.mesh !== draggedObj) {
+                            ion.mesh.position.y -= ion.speed * window.powerT;
+                            if (ion.mesh.position.y <= eYMin + 0.8) {
+                                ion.state = 'receiving_electrons'; ion.timer = 0;
+                                for(let j=0; j<3; j++) {
+                                    const el = createReactionElectron(); el.position.set(ion.mesh.position.x + (Math.random()-0.5)*1.5, eYMin - 0.2, ion.mesh.position.z + (Math.random()-0.5)*1.5);
+                                    el.userData = { target: ion.mesh, progress: 0, speed: 0.01 + Math.random()*0.005 }; reactionElectrons.push(el); particlesGroup.add(el);
+                                }
+                            }
+                        }
+                    } else if (ion.state === 'receiving_electrons') {
+                        ion.timer += 0.5 * window.powerT;
+                        if (ion.timer > 40) { ion.state = 'deposited'; ion.timer = 0; ion.mesh.material = matAlMetal; ion.mesh.userData.name = "Al 铝单质"; }
+                    } else if (ion.state === 'deposited') {
+                        ion.timer += 0.5 * window.powerT; ion.mesh.position.y -= 0.0075 * window.powerT; ion.mesh.scale.addScalar(-0.01 * window.powerT);
+                        if (ion.timer > 40) { ion.state = 'falling'; ion.mesh.material = matAl; ion.mesh.userData.name = "Al³⁺"; ion.mesh.scale.setScalar(1); ion.mesh.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), eYMax, THREE.MathUtils.randFloat(eZMin, eZMax)); }
+                    }
+                });
+
+                oIons.forEach(ion => {
+                    if (ion.state === 'rising') {
+                        if (autoMove && ion.mesh !== draggedObj) {
+                            if (!ion.targetSite) { let avail = anodeSites.filter(s => s.count < 2); if(avail.length > 0) ion.targetSite = avail[Math.floor(Math.random() * avail.length)]; }
+                            if (ion.targetSite) {
+                                let dx = ion.targetSite.x - ion.mesh.position.x, dy = ion.targetSite.y - ion.mesh.position.y, dz = ion.targetSite.z - ion.mesh.position.z;
+                                let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                                if (dist < 0.1) {
+                                    ion.state = 'binding'; ion.targetSite.count++; ion.targetSite.oxIons.push(ion);
+                                    if (ion.targetSite.count === 1) { ion.mesh.position.set(ion.targetSite.x - 0.15, ion.targetSite.y, ion.targetSite.z); } 
+                                    else if (ion.targetSite.count === 2) {
+                                        let cSite = ion.targetSite; ion.mesh.position.set(cSite.x + 0.15, cSite.y, cSite.z);
+                                        for(let j=0; j<4; j++) { let el = createReactionElectron(); el.position.copy(cSite); el.userData = { target: null, progress: 0, dir: new THREE.Vector3((Math.random()-0.5)*0.4, 1, (Math.random()-0.5)*0.4) }; reactionElectrons.push(el); particlesGroup.add(el); }
+                                        let o2 = o2Pool.find(m => !m.active); if(o2) { o2.active = true; o2.mesh.visible = true; o2.mesh.position.copy(cSite); }
+                                        cSite.oxIons.forEach(o => { o.state = 'rising'; o.targetSite = null; o.mesh.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), eYMin, THREE.MathUtils.randFloat(eZMin, eZMax)); });
+                                        cSite.count = 0; cSite.oxIons = [];
+                                    }
+                                } else { ion.mesh.position.add(new THREE.Vector3(dx/dist, dy/dist, dz/dist).multiplyScalar(ion.speed * window.powerT)); }
+                            } else { ion.mesh.position.y += ion.speed * window.powerT; if(ion.mesh.position.y > eYMax) ion.mesh.position.y = eYMin; }
+                        }
+                    }
+                });
+
+                o2Pool.forEach(mol => {
+                    if(mol.active) {
+                        mol.mesh.position.y += mol.speed * window.powerT; mol.mesh.position.x += Math.sin(Date.now() * 0.001 + mol.mesh.position.y * 3) * 0.0025 * window.powerT;
+                        mol.mesh.rotation.z += 0.02 * window.powerT; mol.mesh.rotation.y += 0.02 * window.powerT;
+                        if (mol.mesh.position.y > eYMax + 2.0) { mol.active = false; mol.mesh.visible = false; }
+                    }
+                });
+
+                for (let i = reactionElectrons.length - 1; i >= 0; i--) {
+                    const el = reactionElectrons[i];
+                    if (el.userData.target) {
+                        el.userData.progress += el.userData.speed * window.powerT; el.position.lerpVectors(el.position, el.userData.target.position, 0.05 * window.powerT);
+                    } else {
+                        el.userData.progress += 0.01 * window.powerT; el.position.add(el.userData.dir.clone().multiplyScalar(0.04 * window.powerT));
+                    }
+                    if (el.userData.progress >= 1) { particlesGroup.remove(el); reactionElectrons.splice(i, 1); }
+                }
+            }
+
+            if (window.hasPower && !isAnodeEffect) {
+                externalElectrons.forEach(el => {
+                    el.progress += 0.004 * window.powerT; if(el.progress > 1) el.progress = 0;
+                    if(el.type === 'cathode') el.mesh.position.copy(blackCurve.getPoint(el.progress));
+                    else el.mesh.position.copy(redCurve.getPoint(1 - el.progress));
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
