@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>电解熔融氧化铝 - 虚拟实验室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f3f4f6; color: #1f2937; font-family: sans-serif; touch-action: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; transition: filter 0.5s; }
+        .glass-panel { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(0, 0, 0, 0.05); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); }
+        #tooltip { position: fixed; pointer-events: none; background: rgba(17, 24, 39, 0.9); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; z-index: 50; transform: translate(-50%, -150%); white-space: nowrap; transition: opacity 0.1s ease; }
+        #tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -4px; border-width: 4px; border-style: solid; border-color: rgba(17, 24, 39, 0.9) transparent transparent transparent; }
+        
+        /* 隐藏横向滚动条 */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+
+    <div id="tooltip" class="opacity-0 hidden"></div>
+    <div id="alarm-overlay" class="absolute inset-0 pointer-events-none bg-red-600 opacity-0 mix-blend-multiply transition-opacity duration-100 z-0"></div>
+
+    <!-- UI 控制层 -->
+    <div class="absolute inset-0 pointer-events-none z-10 flex flex-col">
+        
+        <!-- 顶部：金属活动性顺序时间轴 (纯科普背景) -->
+        <div class="w-full bg-gray-900 shadow-md transition-opacity duration-300" id="top-timeline">
+            <div class="flex text-[10px] font-bold text-center text-white h-4 items-center">
+                <div class="w-[35%] bg-blue-600 border-r border-gray-800">电解法</div>
+                <div class="w-[35%] bg-orange-500 border-r border-gray-800">热还原法</div>
+                <div class="w-[15%] bg-yellow-500 border-r border-gray-800">热分解法</div>
+                <div class="w-[15%] bg-gray-500">物理分离</div>
+            </div>
+            <div class="flex overflow-x-auto hide-scroll py-1.5 px-2 gap-1.5 items-center">
+                <div class="flex-shrink-0 bg-blue-100 text-blue-800 border border-blue-400 rounded px-2 py-0.5 text-[11px] font-bold">KCl</div>
+                <div class="flex-shrink-0 bg-blue-100 text-blue-800 border border-blue-400 rounded px-2 py-0.5 text-[11px] font-bold">CaCl₂</div>
+                <div class="flex-shrink-0 bg-blue-100 text-blue-800 border border-blue-400 rounded px-2 py-0.5 text-[11px] font-bold">NaCl</div>
+                <div class="flex-shrink-0 bg-blue-100 text-blue-800 border border-blue-400 rounded px-2 py-0.5 text-[11px] font-bold">MgCl₂</div>
+                <div class="flex-shrink-0 bg-blue-600 text-white border border-blue-400 rounded px-2 py-0.5 text-[11px] font-bold shadow-md transform scale-105">Al₂O₃ (当前)</div>
+                
+                <div class="flex-shrink-0 w-px h-5 bg-gray-600 mx-0.5"></div>
+                <div class="flex-shrink-0 bg-orange-100 text-orange-800 border border-orange-400 rounded px-2 py-0.5 text-[11px] font-bold">Zn 锌</div>
+                <div class="flex-shrink-0 bg-orange-100 text-orange-800 border border-orange-400 rounded px-2 py-0.5 text-[11px] font-bold">Fe 铁</div>
+                <div class="flex-shrink-0 bg-orange-100 text-orange-800 border border-orange-400 rounded px-2 py-0.5 text-[11px] font-bold">Sn 锡</div>
+                <div class="flex-shrink-0 bg-orange-100 text-orange-800 border border-orange-400 rounded px-2 py-0.5 text-[11px] font-bold">Pb 铅</div>
+                <div class="flex-shrink-0 bg-orange-100 text-orange-800 border border-orange-400 rounded px-2 py-0.5 text-[11px] font-bold">Cu 铜</div>
+                
+                <div class="flex-shrink-0 w-px h-5 bg-gray-600 mx-0.5"></div>
+                <div class="flex-shrink-0 bg-yellow-100 text-yellow-800 border border-yellow-400 rounded px-2 py-0.5 text-[11px] font-bold">Hg 汞</div>
+                <div class="flex-shrink-0 bg-yellow-100 text-yellow-800 border border-yellow-400 rounded px-2 py-0.5 text-[11px] font-bold">Ag 银</div>
+                
+                <div class="flex-shrink-0 w-px h-5 bg-gray-600 mx-0.5"></div>
+                <div class="flex-shrink-0 bg-gray-200 text-gray-800 border border-gray-400 rounded px-2 py-0.5 text-[11px] font-bold">Pt 铂</div>
+                <div class="flex-shrink-0 bg-gray-200 text-gray-800 border border-gray-400 rounded px-2 py-0.5 text-[11px] font-bold">Au 金</div>
+            </div>
+        </div>
+
+        <!-- 晶体模型标签 -->
+        <div id="label-al2o3" class="absolute top-1/3 left-[20%] transform -translate-x-1/2 text-white bg-blue-600 px-3 py-1 rounded-full font-bold text-[12px] shadow-lg hidden z-20 pointer-events-none transition-opacity duration-500 opacity-0 border border-blue-300">氧化铝 (离子晶体)</div>
+        <div id="label-alcl3" class="absolute top-1/3 left-[80%] transform -translate-x-1/2 text-white bg-green-600 px-3 py-1 rounded-full font-bold text-[12px] shadow-lg hidden z-20 pointer-events-none transition-opacity duration-500 opacity-0 border border-green-300">氯化铝 (分子晶体)</div>
+
+        <div class="flex-1 relative">
+            <!-- 左上角：电解槽监控 -->
+            <div id="electro-monitor" class="absolute top-2 left-2 pointer-events-auto flex flex-col gap-1.5 w-36 transition-opacity duration-300">
+                <div class="glass-panel px-3 py-2 rounded-lg">
+                    <div class="flex justify-between items-center text-[10px]">
+                        <span class="text-gray-600">槽电压</span><span id="voltage-label" class="font-mono font-bold text-green-600">0.0 V</span>
+                    </div>
+                    <div class="w-full bg-gray-300 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                        <div id="conc-bar" class="bg-blue-500 h-full w-full transition-all duration-200"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 顶部消息提示 -->
+            <div id="banner" class="opacity-0 hidden absolute top-2 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-1.5 rounded-full font-bold shadow-lg border border-white z-50 text-[10px] whitespace-nowrap"></div>
+
+            <!-- 右侧：控制与任务区 -->
+            <div id="electro-controls" class="absolute top-2 right-2 pointer-events-auto flex flex-col items-end gap-2 transition-opacity duration-300">
+                <div class="flex gap-2">
+                    <button id="btn-feed" class="px-3 py-1.5 bg-orange-500 text-white rounded-lg font-bold shadow active:bg-orange-600 text-[10px] border border-orange-300">⬇️ 打壳下料</button>
+                    <button id="btn-crystal" class="px-3 py-1.5 bg-indigo-500 text-white rounded-lg font-bold shadow active:bg-indigo-600 text-[10px] border border-indigo-300 animate-pulse">🔍 为何不用氯化铝？</button>
+                </div>
+                
+                <div id="info-panel" class="glass-panel p-2 rounded-lg text-[9px] w-48 transition-opacity duration-300">
+                    <div class="text-gray-700 font-bold border-b border-gray-200 pb-0.5 mb-1 text-center">电解氧化铝机理</div>
+                    <div class="text-red-600 leading-tight">阳: 2O²⁻ - 4e⁻ = O₂↑</div>
+                    <div class="text-blue-600 leading-tight mb-1">阴: Al³⁺ + 3e⁻ = Al</div>
+                    <div class="text-gray-500 border-t border-gray-100 pt-0.5 mb-1">总: 2Al₂O₃ = 4Al + 3O₂↑</div>
+                    <div class="grid grid-cols-2 gap-1 text-gray-700 mt-1 border-t border-gray-200 pt-1">
+                        <div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-[#BFA6A6]"></div> Al³⁺</div>
+                        <div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-[#FF0D0D]"></div> O²⁻</div>
+                        <div class="flex items-center gap-1"><div class="flex"><div class="w-1.5 h-1.5 rounded-full bg-[#FF0D0D] -mr-0.5 z-10"></div><div class="w-1.5 h-1.5 rounded-full bg-[#FF0D0D] z-20"></div></div> O₂</div>
+                        <div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-[#90E050]"></div> [AlF₆]³⁻</div>
+                        <div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-[#AB5CF2]"></div> Na⁺</div>
+                        <div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-yellow-400"></div> e⁻</div>
+                    </div>
+                </div>
+                
+                <!-- 带有倒计时的任务面板 (建议3) -->
+                <div id="mission-panel" class="glass-panel p-2 rounded-lg text-[10px] w-48 hidden border-l-4 border-purple-500">
+                    <div class="flex justify-between items-center mb-1 border-b border-gray-200 pb-0.5">
+                        <span class="text-purple-600 font-bold">技工考核任务</span>
+                        <span id="mission-timer" class="text-red-500 font-mono font-bold">⏳ 60s</span>
+                    </div>
+                    <div class="flex justify-between text-gray-700"><span>收集铝液:</span><span id="task-al">0 / 3</span></div>
+                    <div class="flex justify-between text-gray-700"><span>生成氧气:</span><span id="task-o2">0 / 2</span></div>
+                </div>
+            </div>
+
+            <!-- 晶体对比专用科普面板 -->
+            <div id="crystal-card" class="absolute bottom-12 left-1/2 transform -translate-x-1/2 glass-panel p-3 rounded-xl shadow-2xl flex-col w-[90%] max-w-[500px] pointer-events-auto border-t-4 border-t-indigo-500 hidden transition-opacity duration-500 opacity-0 z-50">
+                <h2 class="text-[12px] font-bold text-gray-800 mb-2 border-b border-gray-200 pb-1 flex justify-between items-center">
+                    <span>🧊 物质晶体结构与导电性本质对比</span>
+                    <button id="btn-crystal-close" class="px-3 py-1 bg-red-100 text-red-600 rounded shadow font-bold text-[10px] border border-red-200 active:bg-red-200">✖ 结束对比，返回工厂</button>
+                </h2>
+                <div class="flex gap-3 mb-2">
+                    <div class="flex-1 bg-blue-50 p-2 rounded border border-blue-100">
+                        <div class="text-blue-700 font-bold text-[11px] mb-1">氧化铝 (Al₂O₃)</div>
+                        <div class="text-[10px] text-gray-700 leading-relaxed">
+                            属于典型的<b>离子晶体</b>。在熔融状态下，其网状离子键断裂，释放出可以自由移动的 <b>Al³⁺ 和 O²⁻ 离子</b>，<b>具有良好的导电性</b>。
+                        </div>
+                    </div>
+                    <div class="flex-1 bg-green-50 p-2 rounded border border-green-100">
+                        <div class="text-green-700 font-bold text-[11px] mb-1">氯化铝 (AlCl₃)</div>
+                        <div class="text-[10px] text-gray-700 leading-relaxed">
+                            属于<b>分子晶体(共价化合物)</b>。熔融和气态时以孤立的 <b>Al₂Cl₆ 双聚分子</b>存在，<b>无法电离出自由移动的离子</b>，熔融状态下<b>绝缘不导电</b>！
+                        </div>
+                    </div>
+                </div>
+                <!-- 熔融加热动态推演按钮 (建议2) -->
+                <button id="btn-heat-crystal" class="w-full py-1.5 bg-red-500 text-white rounded font-bold text-[11px] shadow active:bg-red-600 border border-red-300">🔥 升温加热 (模拟动态熔融过程)</button>
+            </div>
+
+            <!-- 底部视图控制 -->
+            <div id="electro-footer" class="absolute bottom-3 left-1/2 transform -translate-x-1/2 pointer-events-auto flex gap-1 p-1 glass-panel rounded-full items-center transition-opacity duration-300">
+                <button id="btn-macro" class="px-4 py-1.5 bg-blue-600 text-white rounded-full font-bold text-[11px]">宏观</button>
+                <button id="btn-micro" class="px-4 py-1.5 bg-white text-gray-700 rounded-full font-bold text-[11px]">微观</button>
+                <button id="btn-interactive" class="px-4 py-1.5 bg-white text-purple-600 border border-purple-200 rounded-full font-bold text-[11px]">互动考核</button>
+                <div class="w-px h-4 bg-gray-300 mx-1"></div>
+                <button id="btn-playpause" class="px-6 py-1.5 bg-green-500 text-white rounded-full font-bold text-[11px] w-14 text-center">送电</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D 渲染容器 -->
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        // --------------------------------------------------------
+        // 1. 核心系统与计时器初始化
+        // --------------------------------------------------------
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx; let boilSource = null;
+        const clock = new THREE.Clock();
+
+        function initAudio(){ if(!audioCtx) audioCtx = new AudioContext(); if(audioCtx.state === 'suspended') audioCtx.resume(); }
+        function vibrate(d){ if(navigator.vibrate) navigator.vibrate(d); }
+        function playZap(){ if(!audioCtx)return; let o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(800,audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime+0.1); g.gain.setValueAtTime(0.1,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime+0.1); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.1); }
+        function playAlarm(){ if(!audioCtx)return; let o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='square'; o.frequency.setValueAtTime(1000,audioCtx.currentTime); o.frequency.setValueAtTime(1200,audioCtx.currentTime+0.15); g.gain.setValueAtTime(0.05,audioCtx.currentTime); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.3); }
+        function playSuccess(){ if(!audioCtx)return; let o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='sine'; o.frequency.setValueAtTime(523.25,audioCtx.currentTime); o.frequency.setValueAtTime(659.25,audioCtx.currentTime+0.1); o.frequency.setValueAtTime(783.99,audioCtx.currentTime+0.2); g.gain.setValueAtTime(0.1,audioCtx.currentTime); g.gain.linearRampToValueAtTime(0,audioCtx.currentTime+0.5); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.5); vibrate([100,50,100,50,200]); }
+        function startBoil() {
+            if(!audioCtx || boilSource) return;
+            const bSize = audioCtx.sampleRate * 2; const buffer = audioCtx.createBuffer(1, bSize, audioCtx.sampleRate); const data = buffer.getChannelData(0);
+            for(let i=0; i<bSize; i++) data[i] = Math.random()*2 - 1;
+            boilSource = audioCtx.createBufferSource(); boilSource.buffer = buffer; boilSource.loop = true;
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400;
+            const gain = audioCtx.createGain(); gain.gain.value = 0.05;
+            boilSource.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination); boilSource.start();
+        }
+        function stopBoil() { if(boilSource) { boilSource.stop(); boilSource.disconnect(); boilSource=null; } }
+
+        window.isPlaying = false; window.hasPower = false; window.powerT = 0.0; window.viewMode = 'macro';
+        let aluminaConc = 1.0; let isAnodeEffect = false; let prevViewMode = 'macro';
+        
+        // 任务与计时系统
+        let missionTime = 60;
+        let mission = { active: false, o2: 0, al: 0, targetO2: 2, targetAl: 3, done: false };
+
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf3f4f6);
+        scene.fog = new THREE.FogExp2(0xf3f4f6, 0.015);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000); camera.position.set(15, 12, 35);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); document.getElementById('canvas-container').appendChild(renderer.domElement);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI/2 + 0.1;
+
+        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(-9999, -9999);
+        const tooltip = document.getElementById('tooltip'); let hideTooltipTimeout = null;
+
+        function updateMouseAndTooltip(clientX, clientY, isTouch) {
+            if(window.viewMode === 'crystal') return;
+            const rect = renderer.domElement.getBoundingClientRect(); mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1; mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            if(tooltip) { tooltip.style.left = clientX + 'px'; tooltip.style.top = (clientY - (isTouch ? 30 : 0)) + 'px'; }
+            if(hideTooltipTimeout) clearTimeout(hideTooltipTimeout);
+        }
+        window.addEventListener('pointermove', (e) => updateMouseAndTooltip(e.clientX, e.clientY, e.pointerType === 'touch'));
+        window.addEventListener('pointerdown', (e) => updateMouseAndTooltip(e.clientX, e.clientY, e.pointerType === 'touch'));
+        window.addEventListener('pointerup', (e) => { 
+            if (e.pointerType === 'touch') hideTooltipTimeout = setTimeout(() => { mouse.x = -9999; mouse.y = -9999; }, 1500); 
+        });
+
+        // --------------------------------------------------------
+        // 2. 场景物体与材质
+        // --------------------------------------------------------
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7)); 
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6); dirLight.position.set(15, 30, 15); scene.add(dirLight);
+        const heatLight = new THREE.PointLight(0xff6600, 0, 25); heatLight.position.set(0, 3, 0); scene.add(heatLight);
+        
+        const hotColor = new THREE.Color(0xff5500); const coldColor = new THREE.Color(0x666666);
+        const emissiveHot = new THREE.Color(0x220500); const emissiveCold = new THREE.Color(0x000000);
+
+        const materials = {
+            steel: new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.8, roughness: 0.4 }),
+            carbonCathode: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 }),
+            carbonAnode: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 }),
+            aluminumLiquid: new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 1.0, roughness: 0.2 }),
+            electrolyteMacro: new THREE.MeshPhysicalMaterial({ color: coldColor.clone(), emissive: emissiveCold.clone(), roughness: 0.2, transmission: 0.1, transparent: true, depthWrite: false }),
+            crust: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1.0 }),
+            powerSupplyBody: new THREE.MeshStandardMaterial({ color: 0x4a5568, metalness: 0.5, roughness: 0.6 }),
+            wireRed: new THREE.MeshStandardMaterial({ color: 0xcc2222 }),
+            wireBlack: new THREE.MeshStandardMaterial({ color: 0x111111 })
+        };
+
+        const cellGroup = new THREE.Group(); scene.add(cellGroup);
+        const cellWidth = 12, cellHeight = 6, cellDepth = 8, wallThickness = 0.5;
+        
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(cellWidth, cellHeight, wallThickness), materials.carbonCathode); backWall.position.set(0, cellHeight/2, -cellDepth/2 + wallThickness/2); backWall.userData.name = "碳槽内壁(阴极)"; cellGroup.add(backWall);
+        const frontWall = new THREE.Mesh(new THREE.BoxGeometry(cellWidth, cellHeight, wallThickness), materials.carbonCathode); frontWall.position.set(0, cellHeight/2, cellDepth/2 - wallThickness/2); frontWall.userData.name = "碳槽内壁(阴极)"; cellGroup.add(frontWall);
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, cellHeight, cellDepth - wallThickness*2), materials.carbonCathode); leftWall.position.set(-cellWidth/2 + wallThickness/2, cellHeight/2, 0); leftWall.userData.name = "碳槽侧壁(阴极)"; cellGroup.add(leftWall);
+        const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, cellHeight, cellDepth - wallThickness*2), materials.carbonCathode); rightWall.position.set(cellWidth/2 - wallThickness/2, cellHeight/2, 0); rightWall.userData.name = "碳槽侧壁(阴极)"; cellGroup.add(rightWall);
+        const bottomWall = new THREE.Mesh(new THREE.BoxGeometry(cellWidth, wallThickness, cellDepth), materials.carbonCathode); bottomWall.position.set(0, wallThickness/2, 0); bottomWall.userData.name = "碳槽底部(阴极)"; cellGroup.add(bottomWall);
+
+        const alPoolHeight = 1.2, electroHeight = 3.5;
+        const alPoolGeom = new THREE.BoxGeometry(cellWidth-1, alPoolHeight, cellDepth-1, 16, 1, 16); 
+        const alPool = new THREE.Mesh(alPoolGeom, materials.aluminumLiquid);
+        alPool.position.set(0, wallThickness + alPoolHeight/2, 0); alPool.userData.name = "液态铝 (Al)"; alPool.renderOrder = 1; cellGroup.add(alPool);
+        
+        const alPosAttr = alPoolGeom.attributes.position; alPoolGeom.userData.baseY = new Float32Array(alPosAttr.count);
+        for(let i=0; i<alPosAttr.count; i++) alPoolGeom.userData.baseY[i] = alPosAttr.getY(i);
+
+        const electrolyte = new THREE.Mesh(new THREE.BoxGeometry(cellWidth-1, electroHeight, cellDepth-1), materials.electrolyteMacro);
+        electrolyte.position.set(0, wallThickness + alPoolHeight + electroHeight/2, 0); electrolyte.userData.name = "熔融电解质 (含冰晶石与氧化铝)"; electrolyte.renderOrder = 10; cellGroup.add(electrolyte);
+
+        const crust = new THREE.Mesh(new THREE.BoxGeometry(cellWidth-1, 0.2, cellDepth-1), materials.crust);
+        crust.position.set(0, wallThickness + alPoolHeight + electroHeight + 0.1, 0); crust.userData.name = "表面结壳"; crust.renderOrder = 10; cellGroup.add(crust);
+
+        const anodeGroup = new THREE.Group(); scene.add(anodeGroup);
+        const busbarY = wallThickness + alPoolHeight + electroHeight + 4.2;
+        const anodes = [];
+        [-3.5, 0, 3.5].forEach(x => {
+            const anode = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), materials.carbonAnode);
+            anode.position.set(x, wallThickness + alPoolHeight + electroHeight - 0.5, 0); anode.userData.name = "碳块(阳极)"; anode.renderOrder = 2; 
+            anodeGroup.add(anode); anodes.push(anode);
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3.5), materials.steel);
+            rod.position.set(x, anode.position.y + 1.75, 0); rod.userData.name = "金属导电杆"; anodeGroup.add(rod);
+        });
+
+        const busbar = new THREE.Mesh(new THREE.BoxGeometry(10, 0.5, 0.5), materials.steel);
+        busbar.position.set(0, busbarY, 0); busbar.userData.name = "阳极母线"; anodeGroup.add(busbar);
+
+        const powerGroup = new THREE.Group(); powerGroup.position.set(0, 11, -8); scene.add(powerGroup);
+        const cabinet = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 4), materials.powerSupplyBody); cabinet.userData.name = "大功率整流变压柜"; powerGroup.add(cabinet);
+        
+        const matFins = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.8, roughness: 0.4 });
+        for(let i = -1.5; i <= 1.5; i += 0.4) {
+            let finL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 3.5), matFins); finL.position.set(-4.1, 0, i); finL.userData.name = "散热冷却鳍片"; powerGroup.add(finL);
+            let finR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 3.5), matFins); finR.position.set(4.1, 0, i); finR.userData.name = "散热冷却鳍片"; powerGroup.add(finR);
+        }
+
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(5, 1.5), new THREE.MeshBasicMaterial({color: 0x111111})); screen.position.set(0, 0.5, 2.01); screen.userData.name = "状态监测大屏"; powerGroup.add(screen);
+        window.screenMat = screen.material;
+
+        const cathodeTerminal = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 1), materials.steel); cathodeTerminal.position.set(-6.5, 0.25, 0); cathodeTerminal.userData.name = "阴极集电棒(端子)"; cellGroup.add(cathodeTerminal);
+        
+        const termRed = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.0, 16), materials.wireRed); termRed.position.set(1.5, -1.25, 0); termRed.userData.name = "直流正极输出"; powerGroup.add(termRed);
+        const termBlack = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.0, 16), materials.wireBlack); termBlack.position.set(-1.5, -1.25, 0); termBlack.userData.name = "直流负极输出"; powerGroup.add(termBlack);
+
+        const redCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(1.5, 11-1.25, -8), new THREE.Vector3(3, 11-2, -5), new THREE.Vector3(4, busbarY + 1.5, 0), new THREE.Vector3(4, busbarY + 0.25, 0)]);
+        const wireRed = new THREE.Mesh(new THREE.TubeGeometry(redCurve, 30, 0.1, 8), materials.wireRed); wireRed.userData.name = "正极导电母排"; scene.add(wireRed); 
+        
+        const blackCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(-1.5, 11-1.25, -8), new THREE.Vector3(-4.5, 11-1.5, -5), new THREE.Vector3(-7.5, 6, 0), new THREE.Vector3(-7.5, 0.25, 0), new THREE.Vector3(-7, 0.25, 0)]);
+        const wireBlack = new THREE.Mesh(new THREE.TubeGeometry(blackCurve, 40, 0.1, 8), materials.wireBlack); wireBlack.userData.name = "负极导电母排"; scene.add(wireBlack); 
+
+        scene.traverse(obj => { if (obj.isMesh) obj.frustumCulled = false; });
+
+        // --------------------------------------------------------
+        // 3. 氧化铝粒子系统 (微观电解)
+        // --------------------------------------------------------
+        const particlesGroup = new THREE.Group(); scene.add(particlesGroup); particlesGroup.visible = false; 
+
+        const matAl = new THREE.MeshStandardMaterial({ color: 0xBFA6A6, roughness: 0.4 });
+        const matO = new THREE.MeshStandardMaterial({ color: 0xFF0D0D, roughness: 0.5 });
+        const matF = new THREE.MeshStandardMaterial({ color: 0x90E050, roughness: 0.5 });
+        const matNa = new THREE.MeshStandardMaterial({ color: 0xAB5CF2, roughness: 0.5 });
+        const matElectron = new THREE.MeshBasicMaterial({ color: 0xffff00 }); 
+        const matAlMetal = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1.0, roughness: 0.1 });
+
+        const geomIonAl3 = new THREE.SphereGeometry(0.18, 12, 12);
+        const geomIonO2 = new THREE.SphereGeometry(0.16, 12, 12);
+        const geomIonNa = new THREE.SphereGeometry(0.14, 12, 12);
+        const geomElectron = new THREE.SphereGeometry(0.08, 8, 8);
+        const geomO2Part = new THREE.SphereGeometry(0.14, 12, 12);
+
+        const alIons = [], oIons = [], naIons = [], alf6Ions = [], reactionElectrons = [], o2Pool = [], sparks = [];
+        const eYMin = wallThickness + alPoolHeight, eYMax = wallThickness + alPoolHeight + electroHeight;
+        const eXMin = -5, eXMax = 5, eZMin = -3, eZMax = 3;
+
+        const anodeSites = [];
+        [-3.5, 0, 3.5].forEach(ax => { for(let i=0; i<6; i++) anodeSites.push({ x: ax + (Math.random()-0.5)*1.5, y: eYMax - 0.7, z: (Math.random()-0.5)*1.5, count: 0, oxIons: [] }); });
+
+        for(let i=0; i<25; i++) {
+            let m = new THREE.Mesh(geomIonAl3, matAl); m.userData.name = "Al³⁺"; m.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), THREE.MathUtils.randFloat(eYMin, eYMax), THREE.MathUtils.randFloat(eZMin, eZMax));
+            alIons.push({ mesh: m, speed: THREE.MathUtils.randFloat(0.008, 0.015), state: 'falling', timer: 0 }); particlesGroup.add(m);
+        }
+        for(let i=0; i<25; i++) {
+            let m = new THREE.Mesh(geomIonO2, matO); m.userData.name = "O²⁻"; m.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), THREE.MathUtils.randFloat(eYMin, eYMax), THREE.MathUtils.randFloat(eZMin, eZMax));
+            oIons.push({ mesh: m, speed: THREE.MathUtils.randFloat(0.008, 0.015), state: 'rising', targetSite: null }); particlesGroup.add(m);
+        }
+        for(let i=0; i<30; i++) {
+            let m = new THREE.Mesh(geomIonNa, matNa); m.userData.name = "Na⁺"; m.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), THREE.MathUtils.randFloat(eYMin, eYMax), THREE.MathUtils.randFloat(eZMin, eZMax));
+            naIons.push({ mesh: m, dir: new THREE.Vector3(THREE.MathUtils.randFloatSpread(1), THREE.MathUtils.randFloatSpread(1), THREE.MathUtils.randFloatSpread(1)).normalize().multiplyScalar(0.003) }); particlesGroup.add(m);
+        }
+        for(let i=0; i<15; i++) {
+            let g = new THREE.Group(); g.userData.name = "[AlF₆]³⁻";
+            g.add(new THREE.Mesh(geomIonAl3, matAl));
+            [[0.22,0,0], [-0.22,0,0], [0,0.22,0], [0,-0.22,0], [0,0,0.22], [0,0,-0.22]].forEach(pos => { let f = new THREE.Mesh(new THREE.SphereGeometry(0.1,8,8), matF); f.position.set(...pos); g.add(f); });
+            g.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), THREE.MathUtils.randFloat(eYMin, eYMax), THREE.MathUtils.randFloat(eZMin, eZMax));
+            alf6Ions.push({ mesh: g, dir: new THREE.Vector3(THREE.MathUtils.randFloatSpread(1), THREE.MathUtils.randFloatSpread(1), THREE.MathUtils.randFloatSpread(1)).normalize().multiplyScalar(0.002), rot: new THREE.Vector3(THREE.MathUtils.randFloatSpread(0.02), THREE.MathUtils.randFloatSpread(0.02), THREE.MathUtils.randFloatSpread(0.02)) }); particlesGroup.add(g);
+        }
+        for(let i=0; i<20; i++) {
+            let g = new THREE.Group(); g.userData.name = "O₂";
+            let o1 = new THREE.Mesh(geomO2Part, matO); o1.position.x = 0.12; g.add(o1);
+            let o2 = new THREE.Mesh(geomO2Part, matO); o2.position.x = -0.12; g.add(o2);
+            g.visible = false; o2Pool.push({ mesh: g, active: false, speed: THREE.MathUtils.randFloat(0.015, 0.03) }); particlesGroup.add(g);
+        }
+        
+        const powderPool = [];
+        for(let i=0; i<30; i++) {
+            let p = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), new THREE.MeshBasicMaterial({color: 0xffffff})); p.visible = false; scene.add(p); powderPool.push({mesh: p, active: false, vy: 0, vx: 0});
+        }
+
+        const externalElectronsGroup = new THREE.Group(); scene.add(externalElectronsGroup);
+        const externalElectrons = [];
+        for(let i=0; i<25; i++) {
+            let m = new THREE.Mesh(geomElectron, matElectron); m.userData.name = "e⁻ (外电路)";
+            externalElectrons.push({ mesh: m, progress: Math.random(), type: Math.random() > 0.5 ? 'cathode' : 'anode' }); externalElectronsGroup.add(m);
+        }
+
+        // --------------------------------------------------------
+        // 4. 晶体结构对比模型库 (Al2O3 vs AlCl3 加热推演) (建议2)
+        // --------------------------------------------------------
+        const crystalGroup = new THREE.Group(); scene.add(crystalGroup); crystalGroup.visible = false;
+        let isCrystalHeating = false;
+
+        function createBond(p1, p2, mat, radius=0.03) {
+            const dist = p1.distanceTo(p2);
+            const cyl = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, dist, 8), mat);
+            cyl.position.copy(p1).lerp(p2, 0.5);
+            cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+            return cyl;
+        }
+
+        // 左侧：氧化铝
+        const al2o3Group = new THREE.Group(); al2o3Group.position.set(-3.5, 3, 0); crystalGroup.add(al2o3Group);
+        const matBondIonic = new THREE.MeshStandardMaterial({color: 0x888888, transparent: true, opacity: 0.5});
+        const al2o3Nodes = []; const al2o3Bonds = [];
+        for(let x=-1; x<=1; x++) {
+            for(let y=-1; y<=1; y++) {
+                for(let z=-1; z<=1; z++) {
+                    let isAl = (x+y+z)%2 !== 0; 
+                    let sphere = new THREE.Mesh(isAl ? geomIonAl3 : geomIonO2, isAl ? matAl : matO);
+                    sphere.position.set(x*1.2, y*1.2, z*1.2);
+                    al2o3Nodes.push({mesh: sphere, pos: sphere.position.clone(), isAl: isAl, vel: null});
+                    al2o3Group.add(sphere);
+                }
+            }
+        }
+        for(let i=0; i<al2o3Nodes.length; i++) {
+            for(let j=i+1; j<al2o3Nodes.length; j++) {
+                if(al2o3Nodes[i].isAl !== al2o3Nodes[j].isAl && al2o3Nodes[i].pos.distanceTo(al2o3Nodes[j].pos) < 1.3) {
+                    let b = createBond(al2o3Nodes[i].pos, al2o3Nodes[j].pos, matBondIonic, 0.04);
+                    al2o3Group.add(b); al2o3Bonds.push(b);
+                }
+            }
+        }
+
+        // 右侧：氯化铝双聚分子
+        const al2cl6Group = new THREE.Group(); al2cl6Group.position.set(3.5, 3, 0); crystalGroup.add(al2cl6Group);
+        const matCl = new THREE.MeshStandardMaterial({color: 0x33ff33, roughness: 0.5}); 
+        const matBondCov = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.2}); 
+        
+        const posAl1 = new THREE.Vector3(-1.0, 0, 0), posAl2 = new THREE.Vector3(1.0, 0, 0);
+        const posClB1 = new THREE.Vector3(0, 1.2, 0), posClB2 = new THREE.Vector3(0, -1.2, 0);
+        const posClT1 = new THREE.Vector3(-2.0, 0.8, 1.0), posClT2 = new THREE.Vector3(-2.0, -0.8, -1.0);
+        const posClT3 = new THREE.Vector3(2.0, 0.8, -1.0), posClT4 = new THREE.Vector3(2.0, -0.8, 1.0);
+
+        const addAtom = (pos, mat, r) => { let m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 16), mat); m.position.copy(pos); al2cl6Group.add(m); };
+        addAtom(posAl1, matAl, 0.2); addAtom(posAl2, matAl, 0.2);
+        [posClB1, posClB2, posClT1, posClT2, posClT3, posClT4].forEach(p => addAtom(p, matCl, 0.25));
+
+        [ [posAl1, posClB1], [posAl1, posClB2], [posAl2, posClB1], [posAl2, posClB2], [posAl1, posClT1], [posAl1, posClT2], [posAl2, posClT3], [posAl2, posClT4] ].forEach(p => al2cl6Group.add(createBond(p[0], p[1], matBondCov, 0.08)));
+
+        function resetCrystalState() {
+            isCrystalHeating = false;
+            al2o3Bonds.forEach(b => b.visible = true);
+            al2o3Nodes.forEach(n => { n.mesh.position.copy(n.pos); n.vel = null; });
+            al2cl6Group.position.set(3.5, 3, 0);
+            al2cl6Group.rotation.set(0, 0, 0);
+            al2o3Group.rotation.set(0, 0, 0);
+            al2cl6Group.userData.vel = null;
+        }
+
+        document.getElementById('btn-heat-crystal').onclick = () => { isCrystalHeating = true; initAudio(); vibrate(100); };
+
+        // --------------------------------------------------------
+        // 5. 互动逻辑 (上帝之手)
+        // --------------------------------------------------------
+        let draggedObj = null; const dragPlane = new THREE.Plane();
+        window.addEventListener('pointerdown', (e)=>{
+            if(window.viewMode !== 'interactive' || window.powerT < 0.5) return;
+            initAudio(); raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(particlesGroup.children, true);
+            for(let h of hits) {
+                let n = h.object.userData.name || h.object.parent.userData.name;
+                if(n === "Al³⁺" || n === "O²⁻") {
+                    let isFree = false;
+                    if(n === "O²⁻") { const ion = oIons.find(i => i.mesh === h.object); if(ion && ion.state === 'rising') isFree = true; }
+                    else { const ion = alIons.find(i => i.mesh === h.object); if(ion && ion.state === 'falling') isFree = true; }
+                    if(isFree) {
+                        draggedObj = h.object; controls.enabled = false;
+                        camera.getWorldDirection(dragPlane.normal); dragPlane.setFromNormalAndCoplanarPoint(dragPlane.normal, h.object.position);
+                        break;
+                    }
+                }
+            }
+        });
+        window.addEventListener('pointermove', (e)=>{ if(draggedObj){ raycaster.setFromCamera(mouse, camera); const t=new THREE.Vector3(); raycaster.ray.intersectPlane(dragPlane,t); if(t){ t.x = Math.max(eXMin, Math.min(eXMax, t.x)); t.y = Math.max(eYMin, Math.min(eYMax, t.y)); t.z = Math.max(eZMin, Math.min(eZMax, t.z)); draggedObj.position.copy(t); } }});
+        window.addEventListener('pointerup', ()=>{ 
+            if(draggedObj){ 
+                if(draggedObj.userData.name === "O²⁻") {
+                    for(let ion of oIons) { if(ion.mesh!==draggedObj && ion.state==='rising' && draggedObj.position.distanceTo(ion.mesh.position)<1.2) { handleFusion(draggedObj, ion.mesh); break; } }
+                } else if(draggedObj.userData.name === "Al³⁺" && draggedObj.position.y < eYMin + 1.2) {
+                    handleDeposition(draggedObj);
+                }
+                draggedObj=null; controls.enabled=true; 
+            }
+        });
+
+        function handleFusion(m1, m2) {
+            playZap(); vibrate([30,30]); 
+            const ion1 = oIons.find(i => i.mesh === m1); const ion2 = oIons.find(i => i.mesh === m2);
+            ion1.state = 'binding'; ion2.state = 'binding';
+            const mid = m1.position.clone().add(m2.position).multiplyScalar(0.5);
+            m1.position.set(mid.x - 0.15, mid.y, mid.z); m2.position.set(mid.x + 0.15, mid.y, mid.z);
+            for(let j=0; j<4; j++) { 
+                let el = new THREE.Mesh(geomElectron, matElectron); el.position.copy(mid); el.userData = { target: null, progress: 0, dir: new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5)) }; reactionElectrons.push(el); particlesGroup.add(el);
+            }
+            let g = o2Pool.find(p=>!p.active); if(g){ g.active=true; g.mesh.visible=true; g.mesh.position.copy(mid); }
+            if(mission.active && !mission.done){ mission.o2++; updateMissionUI(); }
+            setTimeout(() => {
+                ion1.state = 'rising'; ion2.state = 'rising';
+                ion1.mesh.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), eYMin, THREE.MathUtils.randFloat(eZMin, eZMax));
+                ion2.mesh.position.set(THREE.MathUtils.randFloat(eXMin, eXMax), eYMin, THREE.MathUtils.randFloat(eZMin, eZMax));
+            }, 500);
+        }
+
+        function handleDeposition(m) {
+            const ion = alIons.find(i=>i.mesh===m);
+            if(ion) {
+                ion.state = 'receiving'; ion.timer = 0; vibrate(50);
+                for(let j=0; j<3; j++){ 
+                    let el = new THREE.Mesh(geomElectron, matElectron); el.position.set(m.position.x+(Math.random()-0.5)*1.5, eYMin-0.2, m.position.z+(Math.random()-0.5)*1.5);
+                    el.userData = { target: m, progress: 0, speed: 0.01+Math.random()*0.005 }; reactionElectrons.push(el); particlesGroup.add(el);
+                }
+                if(mission.active && !mission.done){ mission.al++; updateMissionUI(); }
+            }
+        }
+
+        function updateMissionUI() {
+            document.getElementById('task-al').innerText = `${mission.al} / ${mission.targetAl}`;
+            document.getElementById('task-o2').innerText = `${mission.o2} / ${mission.targetO2}`;
+            if(mission.al >= mission.targetAl && mission.o2 >= mission.targetO2 && !mission.done) { 
+                mission.done=true; 
+                let rating = missionTime > 40 ? 'S级 (首席工程师)' : (missionTime > 20 ? 'A级 (优秀技工)' : 'B级 (合格操作员)');
+                showBanner(`🎉 考核通过！评级：${rating}`, true); 
+                playSuccess(); 
+            }
+        }
+        function showBanner(t, s) { const b=document.getElementById('banner'); b.innerText=t; b.className=`absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-1.5 rounded-full font-bold shadow-lg border border-white z-50 text-[10px] whitespace-nowrap ${s?'bg-green-500':'bg-blue-600'}`; b.classList.remove('hidden','opacity-0'); setTimeout(()=>b.classList.add('opacity-0'), 4000); }
+
+        // --------------------------------------------------------
+        // 6. UI 事件与大视角切换
+        // --------------------------------------------------------
+        const ui = { btnPlay: document.getElementById('btn-playpause'), btnMacro: document.getElementById('btn-macro'), btnMicro: document.getElementById('btn-micro'), btnInt: document.getElementById('btn-interactive'), btnFeed: document.getElementById('btn-feed'), btnCrystal: document.getElementById('btn-crystal'), btnCrystalClose: document.getElementById('btn-crystal-close') };
+
+        ui.btnPlay?.addEventListener('click', ()=>{
+            initAudio(); window.isPlaying = !window.isPlaying; window.hasPower = window.isPlaying;
+            ui.btnPlay.innerText = window.isPlaying ? "断电" : "送电";
+            ui.btnPlay.className = window.isPlaying ? "px-6 py-1.5 bg-red-500 text-white rounded-full font-bold text-[11px] w-14 text-center" : "px-6 py-1.5 bg-green-500 text-white rounded-full font-bold text-[11px] w-14 text-center";
+            if (window.isPlaying) startBoil(); else stopBoil();
+        });
+
+        function updateView() {
+            const normalCls = "px-4 py-1.5 bg-white text-gray-700 rounded-full font-bold shadow transition-all active:bg-gray-100 text-[11px]";
+            const activeCls = "px-4 py-1.5 bg-blue-600 text-white rounded-full font-bold shadow text-[11px]";
+            const isM = window.viewMode === 'macro';
+            const isC = window.viewMode === 'crystal';
+            
+            ui.btnMacro.className = isM ? activeCls : normalCls;
+            ui.btnMicro.className = window.viewMode === 'micro' ? activeCls : normalCls;
+            ui.btnInt.className = window.viewMode === 'interactive' ? "px-4 py-1.5 bg-purple-600 text-white border border-purple-500 rounded-full font-bold shadow-[0_0_10px_purple] transition-all text-[11px] whitespace-nowrap" : "px-4 py-1.5 bg-white text-purple-600 border border-purple-200 rounded-full font-bold shadow transition-all active:bg-purple-50 text-[11px] whitespace-nowrap";
+
+            document.getElementById('canvas-container').className = '';
+            scene.background.setHex(isC ? 0x111827 : 0xf3f4f6);
+            scene.fog.color.setHex(isC ? 0x111827 : 0xf3f4f6);
+
+            cellGroup.visible = !isC; powerGroup.visible = !isC; anodeGroup.visible = !isC;
+            wireRed.visible = !isC; wireBlack.visible = !isC; externalElectronsGroup.visible = !isC;
+            particlesGroup.visible = (!isM && !isC); crystalGroup.visible = isC;
+
+            if (!isC) {
+                frontWall.visible = isM; crust.visible = isM;
+                const wallOpacity = isM ? 1.0 : 0.05;
+                [leftWall, rightWall, backWall, bottomWall].forEach(w => { w.material.transparent = !isM; w.material.opacity = wallOpacity; w.material.depthWrite = false; });
+                electrolyte.material.transmission = isM ? 0.1 : 1.0; electrolyte.material.opacity = isM ? 1.0 : 0.15; electrolyte.material.depthWrite = false;
+                alPool.material.transparent = !isM; alPool.material.opacity = isM ? 1.0 : 0.8; alPool.material.depthWrite = true;
+                anodes.forEach(a => { a.material.transparent = !isM; a.material.opacity = isM ? 1.0 : 0.6; a.material.depthWrite = true; });
+            }
+            
+            document.getElementById('top-timeline').classList.toggle('opacity-0', isC);
+            document.getElementById('electro-monitor')?.classList.toggle('opacity-0', isC);
+            document.getElementById('electro-controls')?.classList.toggle('opacity-0', isC);
+            document.getElementById('electro-footer')?.classList.toggle('opacity-0', isC);
+            
+            if(isC) {
+                resetCrystalState();
+                document.getElementById('crystal-card').classList.remove('hidden'); setTimeout(() => document.getElementById('crystal-card').classList.remove('opacity-0'), 50);
+                document.getElementById('label-al2o3').classList.remove('hidden'); document.getElementById('label-alcl3').classList.remove('hidden');
+                setTimeout(() => { document.getElementById('label-al2o3').classList.remove('opacity-0'); document.getElementById('label-alcl3').classList.remove('opacity-0'); }, 50);
+                gsapCameraTo(0, 3, 13);
+            } else {
+                document.getElementById('crystal-card').classList.add('opacity-0'); setTimeout(() => document.getElementById('crystal-card').classList.add('hidden'), 500);
+                document.getElementById('label-al2o3').classList.add('opacity-0'); document.getElementById('label-alcl3').classList.add('opacity-0');
+                setTimeout(() => { document.getElementById('label-al2o3').classList.add('hidden'); document.getElementById('label-alcl3').classList.add('hidden'); }, 500);
+                document.getElementById('info-panel')?.classList.toggle('hidden', isM); document.getElementById('info-panel')?.classList.toggle('opacity-0', isM);
+                document.getElementById('mission-panel')?.classList.toggle('hidden', window.viewMode !== 'interactive');
+                
+                if(window.viewMode === 'interactive') { 
+                    mission.active=true; mission.al=0; mission.o2=0; mission.done=false; missionTime=60; 
+                    document.getElementById('mission-timer').className = "text-red-500 font-mono font-bold";
+                    updateMissionUI(); clock.getDelta(); // 重置时钟
+                }
+                
+                if(isM) gsapCameraTo(15, 12, 35); else gsapCameraTo(0, 9, 13);
+            }
+            
+            setTimeout(() => {
+                document.getElementById('electro-monitor').style.pointerEvents = isC ? 'none' : 'auto';
+                document.getElementById('electro-controls').style.pointerEvents = isC ? 'none' : 'auto';
+                document.getElementById('electro-footer').style.pointerEvents = isC ? 'none' : 'auto';
+            }, isC ? 0 : 300);
+        }
+
+        ui.btnMacro.onclick = ()=>{ window.viewMode='macro'; updateView(); };
+        ui.btnMicro.onclick = ()=>{ window.viewMode='micro'; updateView(); };
+        ui.btnInt.onclick = ()=>{ window.viewMode='interactive'; window.isPlaying=true; window.hasPower=true; ui.btnPlay.innerText="断电"; ui.btnPlay.className="px-6 py-1.5 bg-red-500 text-white rounded-full font-bold text-[11px] w-14 text-center"; startBoil(); updateView(); };
+        ui.btnFeed.onclick = ()=>{ initAudio(); vibrate(100); aluminaConc = 1.0; isAnodeEffect = false; document.getElementById('alarm-overlay').classList.add('opacity-0'); document.getElementById('voltage-label').className="font-mono font-bold text-green-600"; let ap=0; powderPool.forEach(p=>{if(!p.active&&ap<15){p.active=true;p.mesh.visible=true;p.mesh.position.set((Math.random()-0.5)*8,eYMax+3,(Math.random()-0.5)*4);p.vy=-0.1-Math.random()*0.05;p.vx=(Math.random()-0.5)*0.02;ap++;}}); };
+        ui.btnCrystal.onclick = () => { prevViewMode = window.viewMode; window.viewMode = 'crystal'; initAudio(); vibrate(50); updateView(); };
+        ui.btnCrystalClose.onclick = () => { window.viewMode = prevViewMode; initAudio(); vibrate(50); updateView(); };
+
+        function gsapCameraTo(x,y,z){ const sp=camera.position.clone(),ep=new THREE.Vector3(x,y,z); let p=0; const a=()=>{p+=0.04;if(p<=1){camera.position.lerpVectors(sp,ep,1-Math.pow(1-p,3));requestAnimationFrame(a);}}; a(); }
+
+        // --------------------------------------------------------
+        // 7. 渲染循环 (含计时器、动画)
+        // --------------------------------------------------------
+        function animate() {
+            window._aluminaAnimId = requestAnimationFrame(animate);
+            let dt = clock.getDelta();
+            
+            controls.update();
+
+            // 晶体加热熔化推演逻辑 (建议2)
+            if(window.viewMode === 'crystal') {
+                if(isCrystalHeating) {
+                    al2o3Bonds.forEach(b => b.visible = false);
+                    al2o3Nodes.forEach(n => {
+                        if(!n.vel) n.vel = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize().multiplyScalar(0.04);
+                        n.mesh.position.add(n.vel);
+                        if(Math.abs(n.mesh.position.x) > 2) n.vel.x *= -1;
+                        if(Math.abs(n.mesh.position.y) > 2) n.vel.y *= -1;
+                        if(Math.abs(n.mesh.position.z) > 2) n.vel.z *= -1;
+                    });
+                    
+                    // 优化：氯化铝保持分子形态，在限制范围内做无规则热运动 (不直接飞出屏幕)
+                    if (!al2cl6Group.userData.vel) al2cl6Group.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08);
+                    al2cl6Group.position.add(al2cl6Group.userData.vel);
+                    al2cl6Group.rotation.x += 0.02; al2cl6Group.rotation.z += 0.03;
+                    
+                    // 触碰边界反弹，始终保持在视口内易于观察
+                    if(Math.abs(al2cl6Group.position.x - 3.5) > 1.5) al2cl6Group.userData.vel.x *= -1;
+                    if(Math.abs(al2cl6Group.position.y - 3.0) > 1.5) al2cl6Group.userData.vel.y *= -1;
+                    if(Math.abs(al2cl6Group.position.z) > 1.5) al2cl6Group.userData.vel.z *= -1;
+
+                } else {
+                    al2o3Group.rotation.y += 0.005; al2o3Group.rotation.x += 0.002;
+                    al2cl6Group.rotation.y -= 0.01; al2cl6Group.rotation.z += 0.005;
+                }
+            }
+
+            if (window.hasPower && window.powerT < 1.0) window.powerT += 0.02;
+            if (!window.hasPower && window.powerT > 0.0) window.powerT -= 0.02;
+            materials.electrolyteMacro.color.lerpColors(coldColor, hotColor, window.powerT);
+            materials.electrolyteMacro.emissive.lerpColors(emissiveCold, emissiveHot, window.powerT);
+            
+            if (window.hasPower && window.viewMode !== 'crystal') {
+                externalElectrons.forEach(el => {
+                    el.progress += 0.005 * window.powerT; if(el.progress > 1) el.progress = 0;
+                    if(el.type === 'cathode') el.mesh.position.copy(blackCurve.getPoint(el.progress));
+                    else el.mesh.position.copy(redCurve.getPoint(1 - el.progress));
+                });
+            }
+
+            if(window.hasPower) {
+                if(isAnodeEffect) window.screenMat.color.setHex(Date.now()%400<200?0xff0000:0x330000);
+                else window.screenMat.color.setRGB(0, (100+Math.sin(Date.now()*0.005)*50)/255, 0);
+            } else window.screenMat.color.setHex(0x111111);
+
+            if(window.isPlaying && window.viewMode !== 'crystal') {
+                aluminaConc = Math.max(0, aluminaConc-0.0004);
+                document.getElementById('conc-bar').style.width = (aluminaConc*100)+'%';
+                if(aluminaConc > 0.3) document.getElementById('conc-bar').className = "bg-blue-500 h-full transition-all";
+                else if(aluminaConc > 0.1) document.getElementById('conc-bar').className = "bg-yellow-500 h-full transition-all";
+                else document.getElementById('conc-bar').className = "bg-red-600 h-full transition-all";
+
+                if(aluminaConc < 0.1 && !isAnodeEffect) { isAnodeEffect=true; playAlarm(); document.getElementById('alarm-overlay').classList.remove('opacity-0'); document.getElementById('voltage-label').className="font-mono font-bold text-red-500 animate-pulse"; }
+                
+                // 任务计时器扣减 (建议3)
+                if (mission.active && !mission.done && window.viewMode === 'interactive') {
+                    let speed = isAnodeEffect ? 4.0 : 1.0; // 阳极效应加速掉时间！
+                    missionTime -= dt * speed;
+                    if(missionTime <= 0) {
+                        missionTime = 0; mission.done = true; playAlarm();
+                        showBanner("❌ 考核失败：时间耗尽！请注意打壳下料消除阳极效应！", false);
+                    }
+                    let tUI = document.getElementById('mission-timer');
+                    if(tUI) {
+                        tUI.innerText = `⏳ ${Math.ceil(missionTime)}s`;
+                        if(missionTime < 15) tUI.classList.add('animate-pulse', 'text-red-600');
+                    }
+                }
+
+                if(isAnodeEffect) {
+                    document.getElementById('voltage-label').innerText = (35+Math.random()*5).toFixed(1)+" V";
+                    heatLight.intensity = 3.0; heatLight.color.setHex(0xff0000);
+                    if(Math.random()>0.8) vibrate(50);
+                    if(Math.random()>0.5) { let s = new THREE.Mesh(geomElectron, new THREE.MeshBasicMaterial({color:0xffffff})); s.position.set([-3.5,0,3.5][Math.floor(Math.random()*3)]+(Math.random()-0.5), eYMax, (Math.random()-0.5)); s.userData = {vx:(Math.random()-0.5)*0.2,vy:0.1+Math.random()*0.2,vz:(Math.random()-0.5)*0.2,life:1.0}; scene.add(s); sparks.push(s); }
+                } else {
+                    document.getElementById('voltage-label').innerText = "4.2 V";
+                    heatLight.intensity = 1.2 * window.powerT; heatLight.color.setHex(0xff6600);
+                }
+            } else {
+                document.getElementById('voltage-label').innerText = "0.0 V";
+            }
+
+            for(let i=sparks.length-1; i>=0; i--) { let s=sparks[i]; s.position.x+=s.userData.vx; s.position.y+=s.userData.vy; s.position.z+=s.userData.vz; s.userData.vy-=0.01; s.userData.life-=0.05; s.scale.setScalar(Math.max(0,s.userData.life)); if(s.userData.life<=0){scene.remove(s);sparks.splice(i,1);} }
+            powderPool.forEach(p=>{ if(p.active){ p.mesh.position.y+=p.vy; p.mesh.position.x+=p.vx; if(p.mesh.position.y<eYMax){p.active=false;p.mesh.visible=false;} } });
+
+            if(window.viewMode === 'micro' || window.viewMode === 'interactive') {
+                const auto = window.isPlaying && window.viewMode!=='interactive' && !isAnodeEffect;
+                alIons.forEach(ion => {
+                    if(ion.state === 'falling' && auto && ion.mesh !== draggedObj) {
+                        ion.mesh.position.y -= ion.speed * window.powerT; if(ion.mesh.position.y < eYMin+0.8) handleDeposition(ion.mesh);
+                    } else if(ion.state === 'receiving') {
+                        ion.timer+=1*window.powerT; if(ion.timer > 40) { ion.state='deposited'; ion.timer=0; ion.mesh.material=matAlMetal; ion.mesh.userData.name="Al 铝单质(液态)"; }
+                    } else if(ion.state === 'deposited') {
+                        ion.timer+=1*window.powerT; ion.mesh.position.y-=0.01*window.powerT; ion.mesh.scale.x+=0.01*window.powerT; ion.mesh.scale.z+=0.01*window.powerT; ion.mesh.scale.y-=0.01*window.powerT;
+                        if(ion.timer > 40) { 
+                            ion.state='falling'; ion.mesh.material=matAl; ion.mesh.userData.name="Al³⁺"; ion.mesh.scale.setScalar(1); ion.mesh.position.set(THREE.MathUtils.randFloat(eXMin,eXMax), eYMax, THREE.MathUtils.randFloat(eZMin,eZMax)); 
+                        }
+                    }
+                });
+                oIons.forEach(ion => {
+                    if(ion.state === 'rising' && auto && ion.mesh !== draggedObj) {
+                        if(!ion.targetSite) { let a=anodeSites.filter(s=>s.count<2); if(a.length) ion.targetSite=a[Math.floor(Math.random()*a.length)]; }
+                        if(ion.targetSite) {
+                            let dx=ion.targetSite.x-ion.mesh.position.x, dy=ion.targetSite.y-ion.mesh.position.y, dz=ion.targetSite.z-ion.mesh.position.z, dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+                            if(dist<0.1){ ion.state='binding'; ion.targetSite.count++; ion.targetSite.oxIons.push(ion); if(ion.targetSite.count===1){ion.mesh.position.set(ion.targetSite.x-0.15,ion.targetSite.y,ion.targetSite.z);} else if(ion.targetSite.count===2){ handleFusion(ion.targetSite.oxIons[0].mesh,ion.targetSite.oxIons[1].mesh); ion.targetSite.count=0; ion.targetSite.oxIons=[]; } }
+                            else { ion.mesh.position.x+=(dx/dist)*ion.speed*window.powerT; ion.mesh.position.y+=(dy/dist)*ion.speed*window.powerT; ion.mesh.position.z+=(dz/dist)*ion.speed*window.powerT; }
+                        } else { ion.mesh.position.y+=ion.speed*window.powerT; if(ion.mesh.position.y>eYMax) ion.mesh.position.y=eYMin; }
+                    }
+                });
+                o2Pool.forEach(g => { if(g.active){ g.mesh.position.y+=g.speed*window.powerT; g.mesh.position.x+=Math.sin(Date.now()*0.005+g.mesh.position.y)*0.005*window.powerT; g.mesh.rotation.z+=0.05*window.powerT; g.mesh.rotation.y+=0.05*window.powerT; if(g.mesh.position.y>eYMax+2){g.active=false;g.mesh.visible=false;} } });
+                for(let i=reactionElectrons.length-1; i>=0; i--) {
+                    const e = reactionElectrons[i]; if(e.userData.target) { e.userData.progress+=e.userData.speed*window.powerT; e.position.lerp(e.userData.target.position, 0.1*window.powerT); } else { e.userData.progress+=0.02*window.powerT; e.position.add(e.userData.dir.clone().multiplyScalar(0.08*window.powerT)); }
+                    if(e.userData.progress>=1) { particlesGroup.remove(e); reactionElectrons.splice(i,1); }
+                }
+                const bwn = (window.isPlaying||window.viewMode==='interactive')?window.powerT:0;
+                [naIons, alf6Ions, alIons, oIons].forEach(arr=>arr.forEach(ion=>{ if(ion.state&&ion.state!=='rising'&&ion.state!=='falling')return; if(ion.mesh===draggedObj)return; (ion.mesh||ion).position.add(new THREE.Vector3(THREE.MathUtils.randFloatSpread(0.02),THREE.MathUtils.randFloatSpread(0.02),THREE.MathUtils.randFloatSpread(0.02)).multiplyScalar(bwn)); }));
+            }
+
+            const time = Date.now() * 0.005; const waveAmp = isAnodeEffect ? 0.2 : 0.08;
+            for(let i=0; i<alPosAttr.count; i++) if(alPoolGeom.userData.baseY[i]>0.5) alPosAttr.setY(i, alPoolGeom.userData.baseY[i]+(Math.sin(alPosAttr.getX(i)*1.5+time)+Math.cos(alPosAttr.getZ(i)*1.5+time*0.8))*waveAmp*window.powerT);
+            alPosAttr.needsUpdate = true;
+
+            raycaster.setFromCamera(mouse, camera); const hits = raycaster.intersectObjects(scene.children, true);
+            let found = null; for(let h of hits) { let o=h.object; let v=true; let c=o; while(c){if(!c.visible){v=false;break;}c=c.parent;} if(!v)continue; let n=o.userData.name||(o.parent&&o.parent.userData.name); if(n) { found=n; if(n!=="碳槽内壁(阴极)"&&n!=="碳槽侧壁(阴极)"&&n!=="碳槽底部(阴极)") break; } }
+            if(window.powerT<0.2&&found&&window.viewMode!=='macro'&&window.viewMode!=='crystal'&&found.includes('离子')) found += " (冻结)";
+            if(tooltip) { if(found&&!draggedObj&&window.viewMode!=='crystal'){tooltip.innerText=found;tooltip.classList.remove('hidden','opacity-0');} else {tooltip.classList.add('hidden','opacity-0');} }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
