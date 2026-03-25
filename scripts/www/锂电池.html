@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>钴酸锂电池 · 宏微观无缝切换</title>
+    <style>
+        /* 极致护眼优化：中性石板灰背景 */
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #5c6370; touch-action: none; }
+        
+        /* 统一的 UI 面板样式 */
+        .ui-panel {
+            background: rgba(43, 48, 59, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); 
+            border: 1px solid rgba(136, 192, 208, 0.15);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            border-radius: 10px;
+            color: #eceff4;
+            pointer-events: none;
+            transition: all 0.4s ease;
+        }
+
+        /* 左侧：标题与方程式合并面板 (横屏极简适配) */
+        #leftPanel {
+            position: absolute; 
+            top: max(8px, env(safe-area-inset-top)); 
+            left: max(12px, env(safe-area-inset-left));
+            padding: 8px 10px; z-index: 100;
+        }
+        #leftPanel h1 { 
+            margin: 0; font-size: 0.95rem; font-weight: 500; 
+            border-left: 3px solid #88c0d0; padding-left: 6px;
+        }
+        #reactions {
+            margin-top: 6px; padding-top: 6px;
+            border-top: 1px solid rgba(236, 239, 244, 0.1);
+            font-size: 0.7rem;
+        }
+        .subtitle { color: #00d4aa; font-weight: bold; margin-bottom: 2px; }
+        .half-cell { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; }
+        .electrode { color: #88c0d0; font-weight: 600; }
+        .equation { font-family: monospace; color: #ebcb8b; transition: all 0.3s; }
+        .eq-active { font-weight: bold; color: #d08770; }
+        
+        /* 右侧：实时数据仪表盘 (横屏极简适配) */
+        #dashboard {
+            position: absolute; 
+            top: max(8px, env(safe-area-inset-top)); 
+            right: max(12px, env(safe-area-inset-right));
+            padding: 8px 10px; z-index: 100; min-width: 120px;
+        }
+        .dash-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.7rem; }
+        .dash-label { color: #81a1c1; font-weight: 500; }
+        .dash-value { font-family: 'Courier New', Courier, monospace; font-weight: bold; font-size: 0.8rem; }
+        .volts { color: #8fbcbb; } .amps { color: #ebcb8b; } .soc { color: #a3be8c; } .soh { color: #b48ead; }
+        .progress-bar { width: 100%; height: 3px; background: rgba(236,239,244,0.1); border-radius: 2px; margin-top: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #bf616a, #ebcb8b, #a3be8c); transition: background 0.3s ease; }
+
+        /* 底部：横屏专属全景底栏 (Single Row Layout) */
+        #controls {
+            position: absolute; 
+            bottom: max(8px, env(safe-area-inset-bottom)); 
+            left: max(12px, env(safe-area-inset-left));
+            right: max(12px, env(safe-area-inset-right));
+            display: flex; flex-direction: row; gap: 12px;
+            padding: 6px 10px; border-radius: 12px; z-index: 200; align-items: center;
+            pointer-events: auto; 
+            transition: opacity 0.5s ease;
+        }
+        
+        /* 滑动条并入左侧 */
+        .slider-container { 
+            width: 25%; min-width: 130px; 
+            display: flex; flex-direction: column; align-items: center; gap: 2px; 
+            border-right: 1px solid rgba(236,239,244,0.1); padding-right: 12px; 
+        }
+        .slider-label { font-size: 0.7rem; color: #d8dee9; font-weight: 500; display: flex; justify-content: space-between; width: 100%; padding: 0 2px;}
+        input[type=range] { width: 100%; -webkit-appearance: none; background: rgba(236,239,244,0.2); height: 4px; border-radius: 2px; outline: none; margin: 4px 0; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #88c0d0; cursor: pointer; transition: 0.2s; box-shadow: 0 0 10px rgba(136,192,208,0.5); }
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.3); }
+
+        /* 按钮在右侧单行排布 */
+        .btn-row { 
+            display: flex; gap: 6px; flex: 1; justify-content: space-around; 
+            flex-wrap: nowrap; 
+        }
+        .btn {
+            background: rgba(236,239,244,0.08); border: 1px solid rgba(236,239,244,0.15);
+            color: #d8dee9; font-size: 0.75rem; padding: 6px 4px; border-radius: 8px;
+            cursor: pointer; font-weight: 500; transition: all 0.2s ease;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            flex: 1; min-width: 60px; white-space: nowrap;
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* 仅在支持鼠标的设备上启用 hover，避免手机触屏出现悬停残留 */
+        @media (hover: hover) {
+            .btn:hover { background: rgba(236,239,244,0.2); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        }
+        /* 触屏专属按压反馈 */
+        .btn:active {
+            transform: scale(0.92);
+            background: rgba(236,239,244,0.25);
+        }
+
+        .btn.active { background: rgba(163, 190, 140, 0.2); border-color: #a3be8c; color: #a3be8c; }
+        
+        #btnToggleView { border-bottom: 2px solid #8fbcbb; }
+        #btnTour { border-bottom: 2px solid #b48ead; color: #b48ead; }
+        #btnDischarge { border-bottom: 2px solid #ebcb8b; }
+        #btnCharge { border-bottom: 2px solid #a3be8c; }
+        #btnFPV { border-bottom: 2px solid #81a1c1; color: #81a1c1; }
+        #btnOvercharge { border-bottom: 2px solid #bf616a; color: #bf616a; }
+        
+        /* 智能导览沉浸式字幕 */
+        #tourSubtitle {
+            position: absolute; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 60px); left: 50%; transform: translateX(-50%);
+            color: #eceff4; font-size: 0.8rem; font-weight: 500; text-align: center;
+            background: rgba(43, 48, 59, 0.95); padding: 6px 16px; border-radius: 16px;
+            backdrop-filter: blur(16px); border: 1px solid rgba(136, 192, 208, 0.4);
+            opacity: 0; pointer-events: none; z-index: 500; transition: opacity 0.6s ease;
+            white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            letter-spacing: 0.5px;
+        }
+
+        /* 灾难红光警告层 */
+        #disasterWarning {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(191,97,106,0.05) 0%, rgba(191,97,106,0.2) 100%);
+            opacity: 0; pointer-events: none; z-index: 50; transition: opacity 2s ease;
+        }
+        
+        #credit { display: none; }
+    </style>
+</head>
+<body>
+    <div id="disasterWarning"></div>
+    <div id="tourSubtitle"></div>
+    
+    <!-- 整合后的左侧面板 -->
+    <div id="leftPanel" class="ui-panel">
+        <h1>🔋 钴酸锂电池</h1>
+        <div id="reactions">
+            <div class="subtitle">化学反应方程式</div>
+            <div class="half-cell">
+                <span class="electrode">负极:</span>
+                <span class="equation" id="anodeEq">LiC₆ ⇄ Li⁺+e⁻+6C</span>
+            </div>
+            <div class="half-cell">
+                <span class="electrode">正极:</span>
+                <span class="equation" id="cathodeEq">CoO₂+Li⁺+e⁻ ⇄ LiCoO₂</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右侧仪表盘 -->
+    <div id="dashboard" class="ui-panel">
+        <div class="dash-item">
+            <span class="dash-label">SOC</span>
+            <span class="dash-value soc" id="valSOC">100.0 %</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="barSOC"></div></div>
+        <div style="height: 4px;"></div>
+        <div class="dash-item">
+            <span class="dash-label">SOH</span>
+            <span class="dash-value soh" id="valSOH">100 %</span>
+        </div>
+        <div class="dash-item">
+            <span class="dash-label">电压</span>
+            <span class="dash-value volts" id="valVolts">4.20 V</span>
+        </div>
+        <div class="dash-item">
+            <span class="dash-label">电流</span>
+            <span class="dash-value amps" id="valAmps">0.00 A</span>
+        </div>
+    </div>
+
+    <!-- 底部中控台 (横屏全景栏) -->
+    <div id="controls" class="ui-panel">
+        <div class="slider-container" id="sliderGroup">
+            <div class="slider-label"><span>🌱 新</span><span id="cycleVal">0 次</span><span>🥀 旧</span></div>
+            <input type="range" id="cycleSlider" min="0" max="1000" value="0">
+        </div>
+        <div class="btn-row">
+            <button class="btn" id="btnToggleView">👁️ 宏观</button>
+            <button class="btn" id="btnTour">🗺️ 导览</button>
+            <button class="btn" id="btnDischarge">⚡ 放电</button>
+            <button class="btn" id="btnCharge">🔌 充电</button>
+            <button class="btn" id="btnFPV">🎢 视角</button>
+            <button class="btn" id="btnOvercharge">⚠️ 过充</button>
+            
+            <!-- 导览专属控制按钮（平时隐藏） -->
+            <button class="btn" id="btnTourPause" style="display: none; border-bottom: 2px solid #ebcb8b; color: #ebcb8b;">⏸️ 暂停导览</button>
+            <button class="btn" id="btnTourStop" style="display: none; border-bottom: 2px solid #bf616a; color: #bf616a;">⏹️ 结束导览</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/",
+                "@tweenjs/tween.js": "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@18.6.4/dist/tween.esm.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import * as TWEEN from '@tweenjs/tween.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x5c6370); 
+        scene.fog = new THREE.FogExp2(0x5c6370, 0.012);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
+        // 横屏视野由于上下变窄，适当拉低Y轴，让微观模型居中更好看
+        camera.position.set(0, 14, 45);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+        document.body.appendChild(renderer.domElement);
+
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.2, 0.6);
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.1;
+        
+        const mainLight = new THREE.DirectionalLight(0xeceff4, 0.8);
+        mainLight.position.set(10, 20, 15);
+        scene.add(mainLight);
+        scene.add(new THREE.AmbientLight(0x434c5e));
+        const fillLight = new THREE.DirectionalLight(0x81a1c1, 0.5);
+        fillLight.position.set(-10, -10, -10);
+        scene.add(fillLight);
+
+        const microGroup = new THREE.Group();
+        scene.add(microGroup);
+
+        const gridHelper = new THREE.GridHelper(60, 30, 0x4c566a, 0x3b4252);
+        gridHelper.position.y = -6;
+        microGroup.add(gridHelper);
+
+        // ==========================================
+        // 核心模块 A：微观原子世界 (Micro Universe)
+        // ==========================================
+        function buildElectrodes() {
+            const group = new THREE.Group();
+            const SPACING = 2.36; const offsetB = new THREE.Vector2(Math.sqrt(3)/2, 0.5);
+            
+            const anodeBase = [];
+            for (let i = -4; i <= 4; i++) {
+                for (let j = -4; j <= 4; j++) {
+                    const bx = i * Math.sqrt(3) + j * Math.sqrt(3)/2;
+                    const by = i * 0 + j * 1.5;
+                    if (Math.sqrt(bx*bx + by*by) <= 4.2) {
+                        anodeBase.push(new THREE.Vector2(bx, by));
+                        anodeBase.push(new THREE.Vector2(bx + offsetB.x, by + offsetB.y));
+                    }
+                }
+            }
+            const cPos = [], aLiPos = [];
+            for (let L = 0; L < 10; L++) {
+                const z = (L - 4.5) * SPACING;
+                const hoff = (L%2===0)? new THREE.Vector2(0,0) : offsetB;
+                anodeBase.forEach(p => cPos.push(new THREE.Vector3(p.x+hoff.x, p.y+hoff.y, z)));
+            }
+            let cx = cPos.reduce((s, p)=>s+p.x,0)/cPos.length, cy = cPos.reduce((s, p)=>s+p.y,0)/cPos.length, cz = cPos.reduce((s, p)=>s+p.z,0)/cPos.length;
+            
+            const cGeo = new THREE.SphereGeometry(0.32, 16, 16);
+            const cMat = new THREE.MeshStandardMaterial({ color: 0x3b4252, roughness: 0.9, metalness: 0.1 });
+            const cInst = new THREE.InstancedMesh(cGeo, cMat, cPos.length);
+            const dummy = new THREE.Object3D();
+            cPos.forEach((p, i) => { dummy.position.set(p.x-cx-18, p.y-cy, p.z-cz); dummy.updateMatrix(); cInst.setMatrixAt(i, dummy.matrix); });
+            group.add(cInst);
+            
+            const bondPairs = [];
+            for(let i=0; i<cPos.length; i++) {
+                for(let j=i+1; j<cPos.length; j++) {
+                    if (Math.abs(cPos[i].z - cPos[j].z) > 0.1) continue;
+                    const dist = cPos[i].distanceTo(cPos[j]);
+                    if (dist > 0.9 && dist < 1.1) { bondPairs.push({p1: cPos[i], p2: cPos[j], dist: dist}); }
+                }
+            }
+            const bondGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 6);
+            const bondMat = new THREE.MeshStandardMaterial({ color: 0xd8dee9, transparent: true, opacity: 0.5 });
+            const bondInst = new THREE.InstancedMesh(bondGeo, bondMat, bondPairs.length);
+            bondPairs.forEach((bond, i) => {
+                const mid = new THREE.Vector3().addVectors(bond.p1, bond.p2).multiplyScalar(0.5);
+                const dir = new THREE.Vector3().subVectors(bond.p2, bond.p1).normalize();
+                dummy.position.set(mid.x-cx-18, mid.y-cy, mid.z-cz); dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+                dummy.scale.set(1, bond.dist, 1); dummy.updateMatrix(); bondInst.setMatrixAt(i, dummy.matrix);
+            });
+            group.add(bondInst);
+
+            for (let L = 0; L < 9; L++) {
+                const zMid = ((L-4.5)*SPACING + (L+1-4.5)*SPACING)/2 - cz;
+                anodeBase.forEach(p => {
+                    const x = p.x-cx, y = p.y-cy;
+                    if (Math.sqrt(x*x + y*y) <= 3.8 && Math.random() > 0.4) aLiPos.push(new THREE.Vector3(x-18, y, zMid));
+                });
+            }
+
+            const a=2.816, c=14.05, zO=0.24;
+            function hc(u,v,w){ return new THREE.Vector3(a*u-(a/2)*v, (a*Math.sqrt(3)/2)*v, c*w); }
+            const co=[], o=[], cLiPos=[];
+            for(let iu=-1; iu<=2; iu++) for(let iv=-1; iv<=2; iv++) for(let iw=-1; iw<=1; iw++){
+                co.push(hc(iu,iv,iw+0.5), hc(iu+1/3,iv+2/3,iw+1/6), hc(iu+2/3,iv+1/3,iw+5/6));
+                o.push(hc(iu,iv,iw+zO), hc(iu,iv,iw-zO), hc(iu+1/3,iv+2/3,iw+2/3+zO), hc(iu+1/3,iv+2/3,iw+2/3-zO));
+                cLiPos.push(hc(iu,iv,iw), hc(iu+1/3,iv+2/3,iw+2/3), hc(iu+2/3,iv+1/3,iw+1/3));
+            }
+            let cxR = cLiPos.reduce((s, p)=>s+p.x,0)/cLiPos.length, cyR = cLiPos.reduce((s, p)=>s+p.y,0)/cLiPos.length, czR = cLiPos.reduce((s, p)=>s+p.z,0)/cLiPos.length;
+            
+            const coInst = new THREE.InstancedMesh(new THREE.SphereGeometry(0.55,16,16), new THREE.MeshPhongMaterial({color:0x434c5e, shininess: 10}), co.length);
+            co.forEach((p, i) => { dummy.position.set(p.x-cxR+18, p.y-cyR, p.z-czR); dummy.updateMatrix(); coInst.setMatrixAt(i, dummy.matrix); });
+            group.add(coInst);
+            
+            const oInst = new THREE.InstancedMesh(new THREE.SphereGeometry(0.4,16,16), new THREE.MeshPhongMaterial({color:0x8f3b4f, shininess: 10}), o.length);
+            o.forEach((p, i) => { dummy.position.set(p.x-cxR+18, p.y-cyR, p.z-czR); dummy.updateMatrix(); oInst.setMatrixAt(i, dummy.matrix); });
+            group.add(oInst);
+
+            cLiPos.forEach(p => { p.x = p.x-cxR+18; p.y = p.y-cyR; p.z = p.z-czR; });
+            return { group, aSlots: aLiPos, cSlots: cLiPos };
+        }
+        
+        const electrodes = buildElectrodes();
+        microGroup.add(electrodes.group);
+
+        const electroFluid = new THREE.Group();
+        const fGeo = new THREE.BufferGeometry();
+        const fPos = new Float32Array(1000 * 3);
+        const fVel = [];
+        for(let i=0; i<1000; i++) {
+            fPos[i*3] = (Math.random()-0.5)*36; fPos[i*3+1] = (Math.random()-0.5)*20; fPos[i*3+2] = (Math.random()-0.5)*26;
+            fVel.push({ dx: (Math.random()-0.5)*0.05, dy: (Math.random()-0.5)*0.05 });
+        }
+        fGeo.setAttribute('position', new THREE.BufferAttribute(fPos, 3));
+        const fMat = new THREE.PointsMaterial({ color: 0x88c0d0, size: 0.15, transparent: true, opacity: 0.25, blending: THREE.NormalBlending });
+        const fluidPoints = new THREE.Points(fGeo, fMat);
+        electroFluid.add(fluidPoints);
+        
+        const sepMesh = new THREE.Mesh(new THREE.PlaneGeometry(26,20), new THREE.MeshBasicMaterial({color:0x81a1c1, transparent:true, opacity:0.1, wireframe:true}));
+        sepMesh.rotation.y = Math.PI/2;
+        electroFluid.add(sepMesh);
+        microGroup.add(electroFluid);
+
+        const seiGeo = new THREE.IcosahedronGeometry(6, 3);
+        const posAttr = seiGeo.attributes.position;
+        for(let i=0; i<posAttr.count; i++) {
+            const nv = new THREE.Vector3().fromBufferAttribute(posAttr, i);
+            nv.multiplyScalar(1 + (Math.random()-0.5)*0.5); posAttr.setXYZ(i, nv.x, nv.y, nv.z);
+        }
+        seiGeo.computeVertexNormals();
+        const seiMesh = new THREE.Mesh(seiGeo, new THREE.MeshStandardMaterial({ color: 0x4a4e58, roughness: 1.0, transparent: true, opacity: 0.0 }));
+        seiMesh.position.set(-18, 0, 0); 
+        microGroup.add(seiMesh);
+
+        const dendriteGroup = new THREE.Group();
+        microGroup.add(dendriteGroup);
+        const branchGeo = new THREE.CylinderGeometry(0.08, 0.2, 1, 6); branchGeo.translate(0, 0.5, 0);
+        const dendriteMat = new THREE.MeshStandardMaterial({ color: 0xeceff4, emissive: 0xbf616a, emissiveIntensity: 1.0 });
+        
+        const explosionGeo = new THREE.BufferGeometry();
+        const exCount = 1500; const exPos = new Float32Array(exCount * 3); const exVels = [];
+        for(let i=0; i<exCount; i++) {
+            exPos[i*3] = 0; exPos[i*3+1] = 0; exPos[i*3+2] = 0;
+            exVels.push(new THREE.Vector3((Math.random()-0.5)*2, (Math.random()-0.5)*2, (Math.random()-0.5)*2));
+        }
+        explosionGeo.setAttribute('position', new THREE.BufferAttribute(exPos, 3));
+        const explosionPoints = new THREE.Points(explosionGeo, new THREE.PointsMaterial({ color: 0xbf616a, size: 0.4, blending: THREE.NormalBlending }));
+        explosionPoints.visible = false;
+        microGroup.add(explosionPoints);
+
+        function createMicroCircuit() {
+            const group = new THREE.Group();
+            const wireMat = new THREE.MeshStandardMaterial({ color: 0x7b8c9e, metalness: 0.5, roughness: 0.6 });
+            const pathPts = [
+                new THREE.Vector3(-18, 5, 0), new THREE.Vector3(-18, 14, 0), new THREE.Vector3(-2, 14, 0), new THREE.Vector3(-2, 14, 0.8),
+                new THREE.Vector3(2, 14, 0.8), new THREE.Vector3(2, 14, 0), new THREE.Vector3(4, 14, 0), new THREE.Vector3(4, 14, 0.8),
+                new THREE.Vector3(4, 15.6, 0.8), new THREE.Vector3(4, 15.6, 0), new THREE.Vector3(18, 15.6, 0), new THREE.Vector3(18, 5, 0)
+            ];
+            class CustomCurve extends THREE.Curve {
+                getPoint(t, optionalTarget = new THREE.Vector3()) {
+                    const idx = Math.floor(t * (pathPts.length - 1));
+                    if(idx >= pathPts.length - 1) return optionalTarget.copy(pathPts[pathPts.length-1]);
+                    return optionalTarget.copy(pathPts[idx]).lerp(pathPts[idx+1], (t * (pathPts.length - 1)) - idx);
+                }
+            }
+            group.add(new THREE.Mesh(new THREE.TubeGeometry(new CustomCurve(), 100, 0.15, 8, false), wireMat));
+
+            const switchGroup = new THREE.Group();
+            switchGroup.add(new THREE.Mesh(new THREE.BoxGeometry(3, 0.8, 1), new THREE.MeshPhongMaterial({color: 0x353a45})));
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.2, 0.4), new THREE.MeshPhongMaterial({color: 0xe25822}));
+            blade.position.set(0, 0.5, 0); switchGroup.add(blade); switchGroup.position.set(0, 14, 0.8);
+            group.add(switchGroup);
+
+            const loadGroup = new THREE.Group();
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.9, opacity: 1, transparent: true, roughness: 0.1 }));
+            bulb.position.set(4, 14.8, 0.8); loadGroup.add(bulb);
+            const filament = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), new THREE.MeshBasicMaterial({ color: 0xebcb8b }));
+            filament.position.copy(bulb.position); loadGroup.add(filament);
+            const bulbLight = new THREE.PointLight(0xebcb8b, 0, 30); bulbLight.position.copy(bulb.position); loadGroup.add(bulbLight);
+            group.add(loadGroup);
+
+            const powerGroup = new THREE.Group();
+            const battery = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 2.5, 32), new THREE.MeshPhongMaterial({ color: 0x3b4252 }));
+            battery.position.set(4, 14.8, 0.8); powerGroup.add(battery);
+            const capPlus = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.4, 16), new THREE.MeshPhongMaterial({ color: 0xbf616a }));
+            capPlus.position.set(4, 15.6, 0.8); powerGroup.add(capPlus);
+            powerGroup.visible = false; group.add(powerGroup);
+
+            const eCurve = new THREE.CatmullRomCurve3(pathPts);
+            const eGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            const eMat = new THREE.MeshStandardMaterial({ color: 0x88c0d0, emissive: 0x81a1c1, emissiveIntensity: 0.8 });
+            const electrons = [];
+            for (let i = 0; i < 40; i++) {
+                const e = new THREE.Mesh(eGeo, eMat.clone());
+                e.userData = { progress: Math.random(), speed: 0.003 + Math.random()*0.002 };
+                e.visible = false; group.add(e); electrons.push(e);
+            }
+            group.userData = { curve: eCurve, electrons, powerGroup, loadGroup, bulbLight, filament, switchBlade: blade };
+            return group;
+        }
+
+        const microCircuit = createMicroCircuit();
+        microGroup.add(microCircuit);
+
+        function shuffleArray(a) { for(let i=a.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [a[i], a[j]]=[a[j], a[i]]; } }
+        shuffleArray(electrodes.aSlots); shuffleArray(electrodes.cSlots);
+        const ionCount = Math.min(electrodes.aSlots.length, electrodes.cSlots.length, 120); 
+        
+        const matAlive = new THREE.MeshStandardMaterial({ color: 0xffaa33, emissive: 0x884400, emissiveIntensity: 0.8 });
+        const matMigrating = new THREE.MeshStandardMaterial({ color: 0xffcc33, emissive: 0xff9900, emissiveIntensity: 2.0 });
+        const matDead = new THREE.MeshStandardMaterial({ color: 0x666666, emissive: 0x222222, roughness: 0.9 });
+        const shellGeo = new THREE.SphereGeometry(0.8, 16, 16);
+        const shellMat = new THREE.MeshBasicMaterial({ color: 0x88c0d0, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending });
+
+        const ions = [];
+        const liGeo = new THREE.SphereGeometry(0.45, 16, 16);
+        for (let i = 0; i < ionCount; i++) {
+            const mesh = new THREE.Mesh(liGeo, matAlive);
+            microGroup.add(mesh);
+            const shell = new THREE.Mesh(shellGeo, shellMat); shell.visible = false; 
+            microGroup.add(shell);
+
+            const midNode = new THREE.Vector3().addVectors(electrodes.cSlots[i], electrodes.aSlots[i]).multiplyScalar(0.5);
+            midNode.y += (Math.random() - 0.5) * 16; midNode.z += (Math.random() - 0.5) * 16;
+            
+            ions.push({
+                mesh: mesh, shell: shell, seed: Math.random() * 100,
+                slotA: electrodes.aSlots[i], slotC: electrodes.cSlots[i], mid: midNode,
+                threshold: ((i + 0.5) / ionCount) * 100, t: 1.0, speed: 0.006 + Math.random() * 0.006, isDead: false 
+            });
+        }
+
+        // ==========================================
+        // 核心模块 B：宏观实物世界 (Macro Universe)
+        // ==========================================
+        const macroGroup = new THREE.Group();
+        macroGroup.visible = false; 
+        scene.add(macroGroup);
+
+        function createMacroScene() {
+            // 放大底座以匹配更大的外壳
+            const pedestal = new THREE.Mesh(
+                new THREE.CylinderGeometry(38, 40, 1, 64),
+                new THREE.MeshStandardMaterial({color: 0x1a1e24, roughness: 0.8})
+            );
+            pedestal.position.y = -15; // 降到底部避免穿模
+            macroGroup.add(pedestal);
+
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(36, 0.2, 16, 100),
+                new THREE.MeshBasicMaterial({color: 0x81a1c1})
+            );
+            ring.position.y = -14.5;
+            ring.rotation.x = Math.PI / 2;
+            macroGroup.add(ring);
+
+            const batteryGroup = new THREE.Group();
+            
+            // 采用双面渲染并关闭深度写入，打造完美的“科技透视玻璃”
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0x1e222b, metalness: 0.6, roughness: 0.2, 
+                transparent: true, opacity: 0.45, 
+                depthWrite: false, side: THREE.DoubleSide 
+            });
+            // 包装盒扩大到 56 x 26 x 30，确保即便是寿命末期膨胀的SEI膜也不会穿透外壳
+            const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(56, 26, 30), bodyMat);
+            batteryGroup.add(bodyMesh);
+            
+            // 装饰性磨砂腰线
+            const wrapMat = new THREE.MeshStandardMaterial({color: 0x3b4252, roughness: 0.9, transparent: true, opacity: 0.85});
+            const wrapMesh = new THREE.Mesh(new THREE.BoxGeometry(56.2, 10, 30.2), wrapMat);
+            batteryGroup.add(wrapMesh);
+            
+            // 电极端子：放置在Y=13的高耸外壳顶部
+            const anodeMat = new THREE.MeshStandardMaterial({color: 0xb87333, metalness: 0.9, roughness: 0.2});
+            const anodeTerm = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 2, 32), anodeMat);
+            anodeTerm.position.set(-18, 14, 0); // X精准对齐负极晶格中心
+            batteryGroup.add(anodeTerm);
+
+            const cathodeMat = new THREE.MeshStandardMaterial({color: 0xd8dee9, metalness: 0.8, roughness: 0.3});
+            const cathodeTerm = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 2, 32), cathodeMat);
+            cathodeTerm.position.set(18, 14, 0); // X精准对齐正极晶格中心
+            batteryGroup.add(cathodeTerm);
+
+            // SOC 进度条，移到扩大后的前面板 (Z=15)
+            const socBg = new THREE.Mesh(new THREE.PlaneGeometry(34, 1.5), new THREE.MeshBasicMaterial({color: 0x111111}));
+            socBg.position.set(0, -6, 15.01);
+            batteryGroup.add(socBg);
+
+            const socGeo = new THREE.PlaneGeometry(33.6, 1.0);
+            socGeo.translate(33.6/2, 0, 0); 
+            const socRing = new THREE.Mesh(socGeo, new THREE.MeshBasicMaterial({color: 0xa3be8c}));
+            socRing.position.set(-16.8, -6, 15.02); 
+            batteryGroup.add(socRing);
+
+            macroGroup.add(batteryGroup);
+
+            // 外部负载电路，整体高度显著提升以避开巨大的电池壳
+            const loadGroup = new THREE.Group();
+            loadGroup.position.set(0, 28, 0); 
+            
+            const loadBase = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 1.5, 32), new THREE.MeshStandardMaterial({color: 0x3b4252, metalness: 0.5}));
+            loadBase.rotation.x = Math.PI / 2;
+            loadGroup.add(loadBase);
+
+            const coreGlass = new THREE.Mesh(
+                new THREE.SphereGeometry(2.5, 32, 32),
+                new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.95, opacity: 1, transparent: true, roughness: 0.1 })
+            );
+            coreGlass.position.z = 1.5;
+            loadGroup.add(coreGlass);
+
+            const loadLight = new THREE.PointLight(0xebcb8b, 0, 40);
+            loadLight.position.z = 1.5;
+            loadGroup.add(loadLight);
+            
+            const loadCore = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 1), new THREE.MeshBasicMaterial({color: 0xebcb8b}));
+            loadCore.position.z = 1.5;
+            loadGroup.add(loadCore);
+
+            macroGroup.add(loadGroup);
+
+            // 外部充电电路
+            const chargerGroup = new THREE.Group();
+            chargerGroup.position.set(0, 28, 0);
+            const chgHead = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 4), new THREE.MeshStandardMaterial({color: 0x2e3440, metalness: 0.8, roughness: 0.2}));
+            chargerGroup.add(chgHead);
+            const chgGlow = new THREE.Mesh(new THREE.PlaneGeometry(4,2), new THREE.MeshBasicMaterial({color: 0xa3be8c}));
+            chgGlow.position.set(0, 0, 2.01);
+            chargerGroup.add(chgGlow);
+            chargerGroup.visible = false;
+            macroGroup.add(chargerGroup);
+
+            // 宏观电路导线加高
+            const macroWireMat = new THREE.MeshStandardMaterial({ color: 0x4c566a, roughness: 0.4, metalness: 0.6 });
+            const nCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-18, 15, 0), new THREE.Vector3(-18, 28, 0), new THREE.Vector3(-4, 28, 0)
+            ]);
+            const nWire = new THREE.Mesh(new THREE.TubeGeometry(nCurve, 64, 0.4, 16, false), macroWireMat);
+            macroGroup.add(nWire);
+            
+            const pCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(18, 15, 0), new THREE.Vector3(18, 28, 0), new THREE.Vector3(4, 28, 0)
+            ]);
+            const pWire = new THREE.Mesh(new THREE.TubeGeometry(pCurve, 64, 0.4, 16, false), macroWireMat);
+            macroGroup.add(pWire);
+
+            const macroElecGeo = new THREE.SphereGeometry(0.6, 16, 16);
+            const macroElecMat = new THREE.MeshStandardMaterial({color: 0x88c0d0, emissive: 0x81a1c1, emissiveIntensity: 1.5});
+            const mElectronsP = []; const mElectronsN = [];
+            for(let i=0; i<10; i++) {
+                const ep = new THREE.Mesh(macroElecGeo, macroElecMat.clone()); ep.visible = false;
+                const en = new THREE.Mesh(macroElecGeo, macroElecMat.clone()); en.visible = false;
+                ep.userData = { t: Math.random() }; en.userData = { t: Math.random() };
+                macroGroup.add(ep); macroGroup.add(en);
+                mElectronsP.push(ep); mElectronsN.push(en);
+            }
+
+            const overchargeGlow = new THREE.PointLight(0xbf616a, 0, 60);
+            overchargeGlow.position.set(0, 0, 5);
+            macroGroup.add(overchargeGlow);
+
+            return {
+                batteryGroup, wrapMesh, loadGroup, loadLight, loadCore, chargerGroup,
+                socRing, overchargeGlow, pCurve, nCurve, mElectronsP, mElectronsN
+            };
+        }
+
+        const macroData = createMacroScene();
+
+        // ================= 共享状态逻辑引擎 =================
+        let state = 'idle'; // idle, discharge, charge, overcharge, exploding
+        let currentSOC = 100.0;
+        let soh = 100.0;
+
+        let isFPV = false;
+        let fpvTargetIon = null;
+        let fpvPauseTimer = 0;
+
+        let overchargeLevel = 0; 
+        let dendriteNodes = [];
+        
+        let isMacroView = false; 
+        
+        // 导览引擎状态变量
+        let isTouring = false;
+        let isTourPaused = false;
+        let tourShouldStop = false;
+        let currentTweens = [];
+        let moveCamReject = null;
+
+        const ui = {
+            soc: document.getElementById('valSOC'), bar: document.getElementById('barSOC'),
+            soh: document.getElementById('valSOH'), volts: document.getElementById('valVolts'),
+            amps: document.getElementById('valAmps'), cycle: document.getElementById('cycleVal'),
+            slider: document.getElementById('cycleSlider'), btnD: document.getElementById('btnDischarge'),
+            btnC: document.getElementById('btnCharge'), btnFPV: document.getElementById('btnFPV'),
+            btnOC: document.getElementById('btnOvercharge'), warningBg: document.getElementById('disasterWarning'),
+            dash: document.getElementById('dashboard'), eqA: document.getElementById('anodeEq'), 
+            eqC: document.getElementById('cathodeEq'), btnToggle: document.getElementById('btnToggleView'),
+            sliderGroup: document.getElementById('sliderGroup'), reactions: document.getElementById('reactions'),
+            leftPanel: document.getElementById('leftPanel'), btnTour: document.getElementById('btnTour'),
+            controlsContainer: document.getElementById('controls'), tourSubtitle: document.getElementById('tourSubtitle'),
+            btnTourPause: document.getElementById('btnTourPause'), btnTourStop: document.getElementById('btnTourStop')
+        };
+
+        // 统一视角切换函数，防解耦
+        function toggleMacroMicro() {
+            isMacroView = !isMacroView;
+            if(isMacroView) {
+                ui.btnToggle.innerHTML = "👁️ 微观";
+                macroGroup.visible = true;
+                microCircuit.visible = false;
+                if(isFPV) ui.btnFPV.click(); 
+                ui.btnFPV.style.display = 'none'; ui.sliderGroup.style.display = 'none'; ui.reactions.style.display = 'none';
+                new TWEEN.Tween(camera.position).to({x:0, y:20, z:75}, 800).easing(TWEEN.Easing.Cubic.Out).start();
+                new TWEEN.Tween(controls.target).to({x:0, y:0, z:0}, 800).easing(TWEEN.Easing.Cubic.Out).start();
+            } else {
+                ui.btnToggle.innerHTML = "👁️ 宏观";
+                macroGroup.visible = false;
+                microCircuit.visible = true;
+                ui.btnFPV.style.display = 'flex'; ui.sliderGroup.style.display = 'flex'; ui.reactions.style.display = 'block';
+                new TWEEN.Tween(camera.position).to({x:0, y:14, z:45}, 800).easing(TWEEN.Easing.Cubic.Out).start();
+                new TWEEN.Tween(controls.target).to({x:0, y:0, z:0}, 800).easing(TWEEN.Easing.Cubic.Out).start();
+            }
+        }
+
+        ui.btnToggle.addEventListener('click', () => {
+            if(isTouring) return; 
+            toggleMacroMicro();
+        });
+
+        // ================= 交互式叙事智能导览 (可打断/暂停版) =================
+        
+        // 导览期间的 UI 排他切换：隐藏常规按钮，展现专门的打断/暂停控件
+        function setTourUI(active) {
+            const displayNormal = active ? 'none' : 'flex';
+            const displayTour = active ? 'flex' : 'none';
+            
+            ui.sliderGroup.style.display = displayNormal;
+            ui.btnToggle.style.display = displayNormal;
+            ui.btnTour.style.display = displayNormal;
+            ui.btnD.style.display = displayNormal;
+            ui.btnC.style.display = displayNormal;
+            ui.btnFPV.style.display = displayNormal;
+            ui.btnOC.style.display = displayNormal;
+
+            ui.btnTourPause.style.display = displayTour;
+            ui.btnTourStop.style.display = displayTour;
+        }
+
+        // 定制的支持暂停和打断的延迟函数
+        const pausableDelay = async (ms) => {
+            let elapsed = 0;
+            const step = 50;
+            while (elapsed < ms) {
+                if (tourShouldStop) throw new Error('Tour stopped');
+                if (!isTourPaused) elapsed += step;
+                await new Promise(r => setTimeout(r, step));
+            }
+        };
+
+        // 定制的支持暂停和打断的运镜函数
+        const moveCam = (px, py, pz, tx, ty, tz, duration = 3000) => {
+            return new Promise((resolve, reject) => {
+                if (tourShouldStop) return reject(new Error('Tour stopped'));
+                
+                moveCamReject = reject;
+                const t1 = new TWEEN.Tween(camera.position).to({x:px, y:py, z:pz}, duration).easing(TWEEN.Easing.Cubic.InOut);
+                const t2 = new TWEEN.Tween(controls.target).to({x:tx, y:ty, z:tz}, duration).easing(TWEEN.Easing.Cubic.InOut);
+                
+                t2.onComplete(() => {
+                    moveCamReject = null;
+                    resolve();
+                });
+
+                currentTweens = [t1, t2];
+                t1.start();
+                t2.start();
+                if (isTourPaused) {
+                    t1.pause(); t2.pause();
+                }
+            });
+        };
+
+        // 绑定暂停和继续逻辑
+        ui.btnTourPause.addEventListener('click', () => {
+            isTourPaused = !isTourPaused;
+            if (isTourPaused) {
+                ui.btnTourPause.innerHTML = '▶️ 继续导览';
+                ui.btnTourPause.style.borderColor = '#a3be8c'; ui.btnTourPause.style.color = '#a3be8c';
+                currentTweens.forEach(t => t.pause());
+            } else {
+                ui.btnTourPause.innerHTML = '⏸️ 暂停导览';
+                ui.btnTourPause.style.borderColor = '#ebcb8b'; ui.btnTourPause.style.color = '#ebcb8b';
+                currentTweens.forEach(t => t.resume());
+            }
+        });
+
+        // 绑定打断和结束逻辑
+        ui.btnTourStop.addEventListener('click', () => {
+            tourShouldStop = true;
+            isTourPaused = false;
+            currentTweens.forEach(t => t.stop());
+            if (moveCamReject) {
+                moveCamReject(new Error('Tour stopped'));
+                moveCamReject = null;
+            }
+        });
+
+        async function runGuidedTour() {
+            if(isTouring) return;
+            isTouring = true;
+            tourShouldStop = false;
+            isTourPaused = false;
+            currentTweens = [];
+            ui.btnTourPause.innerHTML = '⏸️ 暂停导览';
+            ui.btnTourPause.style.borderColor = '#ebcb8b'; ui.btnTourPause.style.color = '#ebcb8b';
+            
+            // 剥夺用户滑动控制，并展现导览专用大按钮面板
+            controls.enabled = false;
+            setTourUI(true);
+            
+            // 状态归位
+            if(isMacroView) toggleMacroMicro();
+            if(state !== 'idle') ui.btnD.click(); 
+            currentSOC = 100;
+            syncUI();
+
+            const hideSub = () => { ui.tourSubtitle.style.opacity = 0; };
+            const setSub = text => { 
+                if (tourShouldStop) throw new Error('Tour stopped');
+                ui.tourSubtitle.innerHTML = text; 
+                ui.tourSubtitle.style.opacity = 1; 
+            };
+
+            try {
+                setSub("【导览开始】欢迎来到微观宇宙，左侧是由碳原子组成的石墨负极");
+                await moveCam(-22, 5, 20, -18, 0, 0, 3000);
+                
+                setSub("满电状态下，大量的黄色【锂离子】正安静地储存在石墨层之间");
+                await pausableDelay(3500);
+                
+                ui.btnD.click(); 
+                setSub("【开始放电】锂离子脱离石墨，披上幽蓝色的外衣进入电解液");
+                await moveCam(0, 5, 25, 0, 0, 0, 3500);
+                
+                setSub("在电场牵引下，离子伴随着【布朗运动】穿梭于隔膜的孔隙中");
+                await pausableDelay(4000);
+                
+                setSub("最终抵达右侧正极，脱去外衣并精准嵌入【钴酸锂】晶格内");
+                await moveCam(22, 5, 20, 18, 0, 0, 4000);
+                await pausableDelay(3500);
+                
+                toggleMacroMicro();
+                setSub("【切换宏观】微观世界里亿万次的搬运，化作了宏观设备中源源不断的电能！");
+                await moveCam(10, 20, 75, 0, 0, 0, 3000);
+                await pausableDelay(4500);
+                
+                setSub("【导览结束】您可以自由操作，探索电池的奥秘了");
+                await moveCam(0, 20, 75, 0, 0, 0, 2500);
+                await pausableDelay(2000);
+            } catch(e) {
+                if (e.message !== 'Tour stopped') {
+                    console.error(e);
+                } else {
+                    // 用户主动拦截中断时的体验回馈
+                    ui.tourSubtitle.innerHTML = '导览已中止';
+                }
+            } finally {
+                hideSub();
+                isTouring = false;
+                controls.enabled = true;
+                setTourUI(false); // 恢复正常的横屏操作面板
+                if (tourShouldStop && state !== 'idle') {
+                    ui.btnD.click(); // 如果正在强行演示放电被叫停，随手关闭充放电
+                }
+            }
+        }
+        
+        ui.btnTour.addEventListener('click', runGuidedTour);
+
+        function setCircuitState(active, mode) {
+            const ud = microCircuit.userData;
+            ud.electrons.forEach(e => e.visible = active);
+            
+            if (active) { 
+                ud.switchBlade.material.color.setHex(0x81c995);
+                if (mode === 'discharge') {
+                    ud.powerGroup.visible = false; ud.loadGroup.visible = true;
+                    ud.bulbLight.intensity = 1.5; ud.filament.material.color.setHex(0xffffff);
+                } else {
+                    ud.powerGroup.visible = true; ud.loadGroup.visible = false;
+                    ud.bulbLight.intensity = 0;
+                }
+            } else {
+                ud.switchBlade.material.color.setHex(0xe25822);
+                ud.bulbLight.intensity = 0; ud.filament.material.color.setHex(0xf5b041);
+            }
+
+            macroData.mElectronsP.forEach(e => e.visible = active);
+            macroData.mElectronsN.forEach(e => e.visible = active);
+            if (active) {
+                if (mode === 'discharge') {
+                    macroData.loadGroup.visible = true; macroData.chargerGroup.visible = false;
+                    macroData.loadLight.intensity = 2.5; macroData.loadCore.material.color.setHex(0xffffff);
+                } else {
+                    macroData.loadGroup.visible = false; macroData.chargerGroup.visible = true;
+                    macroData.loadLight.intensity = 0;
+                }
+            } else {
+                macroData.loadLight.intensity = 0; macroData.loadCore.material.color.setHex(0xebcb8b);
+            }
+        }
+
+        function syncUI() {
+            ui.btnD.classList.remove('active'); ui.btnC.classList.remove('active');
+            ui.btnD.innerHTML = '⚡ 放电'; ui.btnC.innerHTML = '🔌 充电';
+
+            if(state==='discharge') { ui.btnD.classList.add('active'); ui.btnD.innerHTML = '⏸️ 停止'; }
+            if(state==='charge') { ui.btnC.classList.add('active'); ui.btnC.innerHTML = '⏸️ 停止'; }
+        }
+
+        ui.btnD.addEventListener('click', () => { 
+            if(state === 'exploding' || isTouring) return;
+            if(state === 'discharge') {
+                state = 'idle'; setCircuitState(false); ui.eqA.className = 'equation'; ui.eqC.className = 'equation'; syncUI();
+            } else if (currentSOC > 0) {
+                state = 'discharge'; setCircuitState(true, 'discharge');
+                ui.eqA.className = 'equation eq-active'; ui.eqC.className = 'equation eq-active'; syncUI();
+            }
+        });
+
+        ui.btnC.addEventListener('click', () => { 
+            if(state === 'exploding' || isTouring) return;
+            if(state === 'charge') {
+                state = 'idle'; setCircuitState(false); ui.eqA.className = 'equation'; ui.eqC.className = 'equation'; syncUI();
+            } else if (currentSOC < 100) {
+                state = 'charge'; setCircuitState(true, 'charge'); ui.eqA.className = 'equation'; ui.eqC.className = 'equation'; syncUI();
+            }
+        });
+        
+        ui.slider.addEventListener('input', (e) => {
+            let c = parseInt(e.target.value); ui.cycle.textContent = c + " 次";
+            soh = 100 - Math.pow((c/1000), 1.5) * 40; ui.soh.textContent = soh.toFixed(1) + " %";
+            seiMesh.material.opacity = (c / 1000) * 0.8; seiMesh.scale.setScalar(1 + (c/1000)*0.2);
+            ions.forEach(ion => {
+                if(ion.threshold > soh) { ion.isDead = true; ion.mesh.material = matDead; ion.shell.visible = false; }
+                else { ion.isDead = false; ion.mesh.material = (ion.t > 0 && ion.t < 1) ? matMigrating : matAlive; }
+            });
+        });
+
+        ui.btnFPV.addEventListener('click', () => {
+            if(isTouring) return;
+            isFPV = !isFPV;
+            if(isFPV) {
+                ui.btnFPV.classList.add('active'); ui.btnFPV.textContent = "🚪 退出";
+                ui.leftPanel.style.opacity = '0'; ui.dash.style.opacity = '0'; fpvPauseTimer = 0; 
+                fpvTargetIon = ions.find(i => !i.isDead && i.t > 0.1 && i.t < 0.9);
+                if(!fpvTargetIon) fpvTargetIon = ions.find(i => !i.isDead);
+            } else {
+                ui.btnFPV.classList.remove('active'); ui.btnFPV.textContent = "🎢 视角";
+                ui.leftPanel.style.opacity = '1'; ui.dash.style.opacity = '1';
+                camera.position.set(0, 14, 45); controls.target.set(0,0,0);
+            }
+        });
+
+        ui.btnOC.addEventListener('click', () => {
+            if(isTouring) return;
+            if (state === 'overcharge' || state === 'exploding') {
+                state = 'idle'; ui.btnOC.textContent = "⚠️ 过充"; ui.btnOC.style.backgroundColor = ""; ui.btnOC.classList.remove('active');
+                dendriteNodes = []; while(dendriteGroup.children.length > 0) { dendriteGroup.remove(dendriteGroup.children[0]); }
+                overchargeLevel = 0; ui.warningBg.style.opacity = '0'; explosionPoints.visible = false;
+                
+                macroData.overchargeGlow.intensity = 0;
+                macroData.batteryGroup.position.set(0, 0, 0);
+                macroData.wrapMesh.material.emissive.setHex(0x000000);
+                macroData.wrapMesh.scale.setScalar(1);
+
+                bloomPass.threshold = 0.6; bloomPass.strength = 0.4; scene.position.set(0,0,0);
+                setCircuitState(false); syncUI(); return;
+            }
+
+            state = 'overcharge'; ui.btnOC.textContent = "🛑 停止"; ui.btnOC.style.backgroundColor = "rgba(191,97,106,0.5)";
+            setCircuitState(true, 'charge'); syncUI(); ui.amps.textContent = "-12.50 A"; ui.volts.textContent = "5.00 V (Danger)";
+        });
+
+        function growDendrite() {
+            if(dendriteNodes.length === 0) { dendriteNodes.push(new THREE.Vector3(-15, (Math.random()-0.5)*4, (Math.random()-0.5)*4)); } 
+            else {
+                const lastNode = dendriteNodes[dendriteNodes.length-1];
+                const dir = new THREE.Vector3(1 + Math.random(), (Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5).normalize();
+                const newNode = lastNode.clone().add(dir.multiplyScalar(0.4));
+                const mesh = new THREE.Mesh(branchGeo, dendriteMat);
+                mesh.position.copy(lastNode); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), newNode.clone().sub(lastNode).normalize());
+                mesh.scale.set(1, lastNode.distanceTo(newNode), 1); dendriteGroup.add(mesh);
+                dendriteNodes.push(newNode);
+                if(newNode.x > 15) triggerThermalRunaway();
+            }
+        }
+
+        function triggerThermalRunaway() {
+            state = 'exploding'; ui.btnOC.textContent = "💥 重置"; ui.volts.textContent = "0.00 V (Short)";
+            explosionPoints.position.copy(dendriteNodes[dendriteNodes.length-1]); explosionPoints.visible = true;
+            bloomPass.threshold = 0.3; bloomPass.strength = 1.5; ui.warningBg.style.opacity = '0.9';
+        }
+
+        // ================= 主动画循环 =================
+        let frameCount = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            frameCount++;
+            
+            // 加入对导览暂停的管控：如果游览暂停，除了镜头的tween被主动pause外，其他依赖时间的物理效果（如自然流动、布朗运动）也可以选择性降速，或者保持动态以防画面过于死板。
+            // 这里我们保持微观动画活着，只暂停相机的 Tween
+            TWEEN.update();
+
+            // 如果处于暂停状态，停止电量消耗逻辑
+            if (!isTourPaused) {
+                if (state === 'discharge' && currentSOC > 0) { currentSOC -= 0.1; if(currentSOC <= 0) { currentSOC = 0; state = 'idle'; syncUI();} }
+                if (state === 'charge' && currentSOC < 100) { currentSOC += 0.1; if(currentSOC >= 100) { currentSOC = 100; state = 'idle'; syncUI();} }
+            }
+
+            if(state !== 'exploding' && state !== 'overcharge') {
+                ui.soc.textContent = currentSOC.toFixed(1) + ' %'; ui.bar.style.width = currentSOC + '%';
+                if(currentSOC > 60) ui.soc.style.color = '#a3be8c'; else if(currentSOC > 20) ui.soc.style.color = '#ebcb8b'; else ui.soc.style.color = '#bf616a';
+                ui.volts.textContent = (3.0 + (currentSOC / 100) * 1.2).toFixed(2) + ' V';
+                let current = 0;
+                if (microCircuit.userData.electrons[0].visible) { 
+                    if (state === 'discharge' || (state === 'idle' && currentSOC < 50)) current = 2.5 + Math.random() * 0.2;
+                    else if (state === 'charge' || (state === 'idle' && currentSOC > 50)) current = -1.8 - Math.random() * 0.1;
+                }
+                ui.amps.textContent = Math.abs(current).toFixed(2) + ' A';
+            }
+
+            if (state === 'overcharge' && !isTourPaused) {
+                overchargeLevel += 0.003; ui.warningBg.style.opacity = Math.min(0.6, overchargeLevel * 0.5);
+                if(!isTouring) scene.position.set((Math.random()-0.5)*0.1, (Math.random()-0.5)*0.1, 0); 
+                macroData.overchargeGlow.intensity = Math.min(5, overchargeLevel * 15);
+                if(frameCount % 8 === 0) growDendrite();
+            }
+            if (state === 'exploding') {
+                ui.warningBg.style.opacity = '0.9';
+                
+                if (!isTourPaused) {
+                    const exArr = explosionPoints.geometry.attributes.position.array;
+                    for(let i=0; i<1500; i++) {
+                        exArr[i*3] += exVels[i].x; exArr[i*3+1] += exVels[i].y; exArr[i*3+2] += exVels[i].z; exVels[i].multiplyScalar(0.98); 
+                    }
+                    explosionPoints.geometry.attributes.position.needsUpdate = true;
+                    if(!isTouring) scene.position.set((Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5, 0); 
+                    if(bloomPass.strength > 1.2) bloomPass.strength -= 0.015; 
+                    
+                    if(isMacroView) {
+                        macroData.wrapMesh.scale.setScalar(1.02 + Math.random()*0.03);
+                        macroData.wrapMesh.material.emissive.setHex(0xbf616a);
+                    }
+                }
+            }
+
+            if (isMacroView) {
+                const ratio = currentSOC / 100;
+                macroData.socRing.scale.set(Math.max(0.001, ratio), 1, 1); 
+                if(currentSOC > 60) macroData.socRing.material.color.setHex(0xa3be8c);
+                else if(currentSOC > 20) macroData.socRing.material.color.setHex(0xebcb8b);
+                else macroData.socRing.material.color.setHex(0xbf616a);
+
+                if (macroData.mElectronsP[0].visible && state !== 'exploding' && !isTourPaused) {
+                    let dir = (state === 'discharge') ? 1 : -1;
+                    let speed = 0.01 * (state === 'overcharge' ? 3 : 1);
+                    
+                    for(let i=0; i<10; i++) {
+                        let ep = macroData.mElectronsP[i], en = macroData.mElectronsN[i];
+                        en.userData.t += dir * speed; ep.userData.t -= dir * speed;
+                        if(en.userData.t > 1) en.userData.t -= 1; if(en.userData.t < 0) en.userData.t += 1;
+                        if(ep.userData.t > 1) ep.userData.t -= 1; if(ep.userData.t < 0) ep.userData.t += 1;
+                        
+                        ep.position.copy(macroData.pCurve.getPoint(ep.userData.t));
+                        en.position.copy(macroData.nCurve.getPoint(en.userData.t));
+                    }
+                }
+
+                if(state === 'discharge' && currentSOC > 0 && !isTourPaused) {
+                    let pulse = 1 + Math.sin(frameCount * 0.2) * 0.1;
+                    macroData.loadCore.scale.setScalar(pulse);
+                }
+                if (state === 'idle' && macroData.mElectronsP[0].visible) setCircuitState(false);
+            } 
+            
+            let anyIonMigrating = false; 
+            ions.forEach(ion => {
+                if(ion.isDead) return;
+                let activeThreshold = ion.threshold * (100 / soh);
+                let target_t = (currentSOC > activeThreshold) ? 1.0 : 0.0;
+                if(state === 'overcharge') target_t = 1.0; 
+                
+                // 导览被暂停时，冻结离子的长距离迁移
+                let currentSpeed = ion.speed * (isFPV ? 0.3 : 1.0);
+                if (isTourPaused) currentSpeed = 0; 
+
+                if (ion.t !== target_t && (state !== 'idle' || (ion.t > 0 && ion.t < 1))) {
+                    ion.t += (target_t === 1.0) ? currentSpeed : -currentSpeed;
+                    if (ion.t > 1.0) ion.t = 1.0; if (ion.t < 0.0) ion.t = 0.0;
+                }
+                if (ion.t > 0 && ion.t < 1) anyIonMigrating = true;
+                
+                if (ion.t === 1.0) {
+                    ion.mesh.position.copy(ion.slotA); if(ion.mesh.material !== matAlive) ion.mesh.material = matAlive; ion.shell.visible = false;
+                } else if (ion.t === 0.0) {
+                    ion.mesh.position.copy(ion.slotC); if(ion.mesh.material !== matAlive) ion.mesh.material = matAlive; ion.shell.visible = false;
+                } else {
+                    if(ion.mesh.material !== matMigrating) ion.mesh.material = matMigrating; ion.shell.visible = true; 
+                    let u = ion.t, easeU = u * u * (3 - 2 * u), omt = 1 - easeU;
+                    let bx = omt*omt*ion.slotC.x + 2*omt*easeU*ion.mid.x + easeU*easeU*ion.slotA.x;
+                    let by = omt*omt*ion.slotC.y + 2*omt*easeU*ion.mid.y + easeU*easeU*ion.slotA.y;
+                    let bz = omt*omt*ion.slotC.z + 2*omt*easeU*ion.mid.z + easeU*easeU*ion.slotA.z;
+                    let taper = Math.sin(ion.t * Math.PI); 
+                    
+                    // 让粒子在原地的布朗抖动一直保留，即使被暂停，更有活性
+                    let jitterX = (Math.sin(frameCount * 0.15 + ion.seed) + Math.cos(frameCount * 0.07 + ion.seed*2)) * 1.5 * taper;
+                    let jitterY = (Math.cos(frameCount * 0.13 + ion.seed) + Math.sin(frameCount * 0.09 + ion.seed*2)) * 1.5 * taper;
+                    let jitterZ = (Math.sin(frameCount * 0.11 + ion.seed) + Math.cos(frameCount * 0.08 + ion.seed*2)) * 1.5 * taper;
+                    ion.mesh.position.set(bx + jitterX, by + jitterY, bz + jitterZ);
+                    ion.shell.position.copy(ion.mesh.position);
+                    let pulse = 1 + Math.sin(frameCount * 0.1 + ion.seed) * 0.1; ion.shell.scale.setScalar(pulse);
+                }
+            });
+
+            let isCircuitVisuallyActive = microCircuit.userData.electrons[0].visible;
+            if (isCircuitVisuallyActive && state !== 'exploding' && !isTourPaused) {
+                let dir = (currentSOC > 50) ? -1 : 1; 
+                if (state === 'charge' || state === 'overcharge') dir = -1;
+                if (state === 'discharge') dir = 1;
+                microCircuit.userData.electrons.forEach(e => {
+                    let spd = e.userData.speed * dir * (state === 'overcharge' ? 3 : 1); 
+                    e.userData.progress += spd;
+                    if (e.userData.progress > 1) e.userData.progress -= 1;
+                    if (e.userData.progress < 0) e.userData.progress += 1;
+                    e.position.copy(microCircuit.userData.curve.getPoint(e.userData.progress));
+                });
+            }
+
+            if (state === 'idle' && !anyIonMigrating && isCircuitVisuallyActive) { setCircuitState(false); ui.eqA.className = 'equation'; ui.eqC.className = 'equation'; }
+
+            // 保留背景流体的恒定运动，避免画面变成死机图
+            const pts = fluidPoints.geometry.attributes.position.array;
+            for(let i=0; i<1000; i++) {
+                pts[i*3] += fVel[i].dx; pts[i*3+1] += fVel[i].dy;
+                if(pts[i*3] > 18 || pts[i*3] < -18) fVel[i].dx *= -1; 
+                if(pts[i*3+1] > 10 || pts[i*3+1] < -10) fVel[i].dy *= -1;
+            }
+            fluidPoints.geometry.attributes.position.needsUpdate = true;
+
+            if (isFPV && fpvTargetIon && !fpvTargetIon.isDead && !isTouring) {
+                if(fpvTargetIon.t === 0.0 || fpvTargetIon.t === 1.0) {
+                    fpvPauseTimer++;
+                    if(fpvPauseTimer > 90) { let next = ions.find(i => !i.isDead && i.t > 0.1 && i.t < 0.9); if(next) { fpvTargetIon = next; fpvPauseTimer = 0; } }
+                } else { fpvPauseTimer = 0; }
+                const pos = fpvTargetIon.mesh.position;
+                let lookDir = new THREE.Vector3();
+                if(fpvTargetIon.t > 0 && fpvTargetIon.t < 1) {
+                    let t2 = fpvTargetIon.t + (state==='charge'? 0.05 : -0.05); if(t2>1)t2=1; if(t2<0)t2=0;
+                    let u2=t2, eU=u2*u2*(3-2*u2), oU=1-eU;
+                    let nx = oU*oU*fpvTargetIon.slotC.x + 2*oU*eU*fpvTargetIon.mid.x + eU*eU*fpvTargetIon.slotA.x;
+                    let ny = oU*oU*fpvTargetIon.slotC.y + 2*oU*eU*fpvTargetIon.mid.y + eU*eU*fpvTargetIon.slotA.y;
+                    let nz = oU*oU*fpvTargetIon.slotC.z + 2*oU*eU*fpvTargetIon.mid.z + eU*eU*fpvTargetIon.slotA.z;
+                    lookDir.set(nx, ny, nz);
+                } else { lookDir.set(pos.x, pos.y, pos.z-5); }
+                const forward = lookDir.clone().sub(pos).normalize();
+                camera.position.lerp(pos.clone().add(forward.multiplyScalar(-2.5)), 0.12); 
+                camera.lookAt(lookDir);
+            } else if (!isFPV && state !== 'exploding' && state !== 'overcharge' && !isTouring) {
+                scene.position.set(0,0,0); controls.update();
+            }
+
+            composer.render();
+        }
+        
+        setCircuitState(false);
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
