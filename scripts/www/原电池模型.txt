@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D 原电池全息认知模型</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #2a3c54 0%, #111a24 100%); 
+            font-family: 'Microsoft YaHei', -apple-system, sans-serif;
+            color: #fff;
+            touch-action: none; 
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        /* 顶部标题UI（更紧凑） */
+        #ui-layer { position: absolute; top: 15px; left: 15px; pointer-events: none; z-index: 10; display: flex; align-items: flex-start; gap: 15px;}
+        .title-box { display: flex; flex-direction: column; }
+        .title { font-size: 20px; font-weight: 800; letter-spacing: 1.5px; color: #7dd3fc; text-shadow: 0px 0px 10px rgba(125,211,252,0.6); margin-bottom: 5px; }
+
+        /* 微型仪表盘 HUD */
+        .hud-dashboard {
+            background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(125,211,252,0.3);
+            border-radius: 8px; padding: 6px 12px; backdrop-filter: blur(8px);
+            display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .hud-meter { width: 40px; height: 20px; border-top-left-radius: 40px; border-top-right-radius: 40px; border: 2px solid #94a3b8; border-bottom: none; position: relative; overflow: hidden; background: rgba(0,0,0,0.5);}
+        .hud-needle { width: 2px; height: 20px; background: #f87171; position: absolute; bottom: 0; left: 50%; transform-origin: bottom center; transform: translateX(-50%) rotate(-60deg); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .hud-text { font-family: monospace; font-size: 13px; color: #6ee7b7; font-weight: bold; width: 60px;}
+        .hud-text.off { color: #fca5a5; }
+
+        /* 动态悬浮提示框样式 */
+        #hover-tooltip {
+            position: absolute; display: none; background: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(255,255,255,0.3); border-left: 4px solid #60a5fa; 
+            padding: 8px 12px; border-radius: 6px; font-size: 13px; color: #f1f5f9;
+            pointer-events: none; z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px); white-space: nowrap; font-weight: bold;
+        }
+        .tooltip-title { font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: normal; }
+
+        /* 右上角控制面板 */
+        #control-panel {
+            position: absolute; top: 15px; right: 15px; background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255,255,255,0.15); backdrop-filter: blur(8px);
+            padding: 8px 10px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 20; width: 145px; display: flex; flex-direction: column; gap: 6px;
+        }
+        select {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 6px 4px; border-radius: 4px; outline: none; font-size: 12px; width: 100%;
+        }
+        select option { background: #334155; color: #fff; }
+        button {
+            border: none; color: #000; font-weight: bold; padding: 8px; border-radius: 4px; font-size: 12px; cursor: pointer; width: 100%; transition: all 0.2s;
+        }
+        button:active { transform: scale(0.96); }
+        .btn-tour { background: linear-gradient(135deg, #7dd3fc 0%, #0ea5e9 100%); }
+        .btn-switch { background: linear-gradient(135deg, #6ee7b7 0%, #10b981 100%); color: #064e3b; }
+        .btn-switch.off { background: linear-gradient(135deg, #fca5a5 0%, #ef4444 100%); color: #450a0a; }
+        .btn-test { background: linear-gradient(135deg, #d8b4fe 0%, #9333ea 100%); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);}
+        .btn-test.on { background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%); color: #451a03; }
+
+        /* 导览解说文本板 */
+        #tour-panel {
+            display: none; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.85); border: 1px solid #7dd3fc; backdrop-filter: blur(10px);
+            padding: 10px 20px; border-radius: 20px; text-align: center; font-size: 14px; color: #fff;
+            z-index: 30; box-shadow: 0 0 20px rgba(125,211,252,0.4); animation: fadeIn 0.5s ease-out; width: 80%; max-width: 450px;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+    <div id="ui-layer">
+        <div class="title-box">
+            <div class="title">3D 原电池全息模型</div>
+            <div class="hud-dashboard">
+                <div class="hud-meter"><div class="hud-needle" id="meter-needle"></div></div>
+                <div class="hud-text" id="meter-text">I: 1.25A</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 控制面板 -->
+    <div id="control-panel">
+        <button id="btn-switch" class="btn-switch">🟢 电路闭合</button>
+        <button id="btn-test" class="btn-test">❓ 盲盒自测 (关)</button>
+        <select id="instance-select">
+            <option value="abstract">概念认知模式</option>
+            <option value="zncu">实例：铜锌电池</option>
+            <option value="fuel">实例：氢氧燃料</option>
+            <option value="leadacid">实例：铅酸电池</option>
+            <option value="znmn">实例：锌锰干电</option>
+        </select>
+        <button id="btn-tour" class="btn-tour">▶ 沉浸式导览</button>
+    </div>
+
+    <div id="tour-panel"></div>
+    <div id="hover-tooltip"></div>
+    <div id="canvas-container"></div>
+
+    <script>
+        // === 1. 初始化场景、相机和渲染器 ===
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x111a24, 0.012);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 8, 40); 
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.toneMapping = THREE.NoToneMapping; 
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05; controls.maxDistance = 100; controls.minDistance = 5;
+
+        // === 2. 光影与后期处理 ===
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene.add(ambientLight); // 稍微调暗环境光以突显灯泡
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2); dirLight.position.set(10, 20, 30); scene.add(dirLight);
+
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.4, 0.85);
+        bloomPass.threshold = 0.85; bloomPass.strength = 1.2; bloomPass.radius = 0.5;
+        const composer = new THREE.EffectComposer(renderer); composer.addPass(renderScene); composer.addPass(bloomPass);
+
+        // === 3. 数据与核心状态管理 ===
+        const instanceData = {
+            abstract: {
+                negMat: "负极材料", posMat: "正极材料", reductant: "还原剂", oxidant: "氧化剂", oxProd: "氧化产物", redProd: "还原产物",
+                ionCond: "离子导体", eCond: "电子导体", solColor: 0xdc2626, anionName: "阴离子", cationName: "阳离子"
+            },
+            zncu: {
+                negMat: "锌片 (Zn)", posMat: "铜片 (Cu)", reductant: "Zn", oxidant: "Cu²⁺", oxProd: "Zn²⁺", redProd: "Cu",
+                ionCond: "CuSO₄溶液", eCond: "外导线", plateLColor: 0xa1a1aa, plateRColor: 0xb87333, solColor: 0x2563eb,
+                plateLName: "Zn板", plateRName: "Cu板", solName: "硫酸铜溶液", anionName: "SO₄²⁻", cationName: "Zn²⁺ / Cu²⁺"
+            },
+            fuel: {
+                negMat: "铂电极 (Pt)", posMat: "铂电极 (Pt)", reductant: "2H₂", oxidant: "O₂", oxProd: "2H₂O", redProd: " ",
+                ionCond: "KOH溶液", eCond: "外电路", plateLColor: 0xcbd5e1, plateRColor: 0xcbd5e1, solColor: 0x94a3b8, 
+                plateLName: "Pt极板", plateRName: "Pt极板", solName: "KOH电解质", anionName: "OH⁻", cationName: "K⁺"
+            },
+            leadacid: {
+                negMat: "铅极板 (Pb)", posMat: "二氧化铅 (PbO₂)", reductant: "Pb", oxidant: "PbO₂", oxProd: "PbSO₄", redProd: "PbSO₄",
+                ionCond: "H₂SO₄溶液", eCond: "外电路", plateLColor: 0x71717a, plateRColor: 0x523f31, solColor: 0x64748b, 
+                plateLName: "Pb板", plateRName: "PbO₂板", solName: "稀硫酸", anionName: "SO₄²⁻", cationName: "H⁺"
+            },
+            znmn: {
+                negMat: "锌筒 (Zn)", posMat: "碳棒 (C)", reductant: "Zn", oxidant: "2MnO₂", oxProd: "Zn(OH)₂", redProd: "2MnOOH",
+                ionCond: "KOH糊状物", eCond: "外电路", plateLColor: 0xa1a1aa, plateRColor: 0x1f2937, solColor: 0xe5e7eb, 
+                plateLName: "锌外壳", plateRName: "碳芯", solName: "电解质糊", anionName: "OH⁻", cationName: "K⁺"
+            }
+        };
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(-9999, -9999);
+        let mouseX = -9999, mouseY = -9999;
+        const interactableObjects = []; const parts = {}; 
+
+        // 全局物理与动画状态
+        const animState = {
+            isCircuitClosed: true, 
+            isTestMode: false, // 盲盒自测模式开关
+            baseCurrent: 1.25,     
+            redCube: 1.0, blueCube: 1.0, greenCubeL: 1.0, greenCubeR: 1.0,
+            isTouring: false, currentModel: 'abstract'
+        };
+
+        // 需要加入盲盒逻辑的关键对象映射
+        const testModeMapping = {
+            'neg_material_text': 'negMat', 'pos_material_text': 'posMat', 
+            'reductant': 'reductant', 'oxidant': 'oxidant', 
+            'ox_product': 'oxProd', 'red_product': 'redProd',
+            'ion_conductor_text': 'ionCond', 'electron_conductor_text': 'eCond'
+        };
+        const testModeKeys = Object.keys(testModeMapping);
+
+        function handlePointerMove(clientX, clientY) {
+            mouseX = clientX; mouseY = clientY;
+            mouse.x = (clientX / window.innerWidth) * 2 - 1; mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+        }
+        window.addEventListener('mousemove', (e) => handlePointerMove(e.clientX, e.clientY));
+        window.addEventListener('touchstart', (e) => { if(e.touches.length > 0) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive: true});
+        window.addEventListener('touchmove', (e) => { if(e.touches.length > 0) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive: true});
+        window.addEventListener('touchend', () => { mouse.x = -9999; mouse.y = -9999; });
+
+        // === 4. 工具函数 ===
+        const textScaleRatio = 0.0105; 
+        function generateTextTexture(text, color, fontSize = 60) {
+            const canvas = document.createElement('canvas'); const context = canvas.getContext('2d');
+            context.font = `bold ${fontSize}px "Microsoft YaHei", sans-serif`;
+            const lines = text.split('\n'); let maxWidth = 0;
+            lines.forEach(line => { const w = context.measureText(line).width; if (w > maxWidth) maxWidth = w; });
+            const lineHeight = fontSize * 1.2; canvas.width = maxWidth + 20; canvas.height = lines.length * lineHeight + 20;
+            if (text.trim() === "") { canvas.width = 2; canvas.height = 2; }
+            context.font = `bold ${fontSize}px "Microsoft YaHei", sans-serif`; context.fillStyle = (color === '#000000') ? '#ffffff' : color; 
+            context.textAlign = 'center'; context.textBaseline = 'middle';
+            const startY = canvas.height / 2 - ((lines.length - 1) * lineHeight) / 2;
+            if (text.trim() !== "") lines.forEach((line, index) => { context.fillText(line, canvas.width / 2, startY + index * lineHeight); });
+            const texture = new THREE.CanvasTexture(canvas); texture.needsUpdate = true;
+            return { texture, width: canvas.width, height: canvas.height };
+        }
+
+        function createText(text, color, tx, ty, tz, fontSize = 60, name = null, parent = null) {
+            const { texture, width, height } = generateTextTexture(text, color, fontSize);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(width * textScaleRatio, height * textScaleRatio, 1); sprite.position.set(tx, ty, tz); sprite.renderOrder = 999;
+            if (name) { sprite.userData.name = name; sprite.userData.baseScale = new THREE.Vector3(sprite.scale.x, sprite.scale.y, 1); interactableObjects.push(sprite); parts[name] = sprite; }
+            if(parent) parent.add(sprite); return sprite;
+        }
+
+        function updateSpriteText(spriteName, newText, color) {
+            const sprite = parts[spriteName]; if(!sprite) return;
+            const { texture, width, height } = generateTextTexture(newText, color, 60);
+            sprite.material.map.dispose(); sprite.material.map = texture;
+            sprite.scale.set(width * textScaleRatio, height * textScaleRatio, 1); sprite.userData.baseScale.copy(sprite.scale);
+        }
+
+        function refreshLabelsForMode() {
+            const data = instanceData[animState.currentModel];
+            testModeKeys.forEach(k => {
+                if(animState.isTestMode) {
+                    updateSpriteText(k, "? 考点", "#e879f9"); // 紫色问号标识
+                } else {
+                    const color = (k.includes('ion')) ? "#f87171" : (k.includes('electron') ? "#93c5fd" : "#6ee7b7");
+                    updateSpriteText(k, data[testModeMapping[k]], color);
+                }
+            });
+        }
+
+        // === 5. 构建模型 ===
+        function buildModel() {
+            const group = new THREE.Group(); scene.add(group); parts.mainGroup = group;
+            function createGlassBlock(w, h, d, colorHex, bx, by, bz, name = null) {
+                const geometry = new THREE.BoxGeometry(w, h, d);
+                const material = new THREE.MeshPhysicalMaterial({ color: colorHex, transmission: 0.5, opacity: 0.25, transparent: true, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false });
+                const mesh = new THREE.Mesh(geometry, material); mesh.position.set(bx, by, bz);
+                const edges = new THREE.EdgesGeometry(geometry); const lineMaterial = new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2, transparent: true, opacity: 0.9 });
+                const line = new THREE.LineSegments(edges, lineMaterial); mesh.add(line);
+                if (name) { mesh.userData.name = name; parts[name] = mesh; } group.add(mesh); return mesh;
+            }
+            function createArrow(dir, originVec, length, colorHex, headLength = 0.8, headWidth = 0.5, parent = group) {
+                const c = (colorHex === 0x000000) ? 0xd1d5db : colorHex;
+                const arrow = new THREE.ArrowHelper(dir.normalize(), originVec, length, c, headLength, headWidth);
+                arrow.line.material.depthTest = false; arrow.cone.material.depthTest = false; arrow.line.renderOrder = 998; arrow.cone.renderOrder = 998;
+                parent.add(arrow); return arrow;
+            }
+
+            const blockD = 10, cubeZ = 2, bottomH = 5, topH = 2.5, sideW = 4, midW = 6;       
+            createGlassBlock(sideW, bottomH, blockD, 0x059669, -5, -2.5, cubeZ, "greenCubeL"); 
+            createGlassBlock(sideW, bottomH, blockD, 0x059669, 5, -2.5, cubeZ, "greenCubeR");  
+            createGlassBlock(midW, bottomH, blockD, 0xdc2626, 0, -2.5, cubeZ, "redCube");      
+            createGlassBlock(sideW*2 + midW, topH, blockD, 0x2563eb, 0, 1.25, cubeZ, "blueCube"); 
+
+            // 外电路导线
+            const wireCurve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-5, 0, 2), new THREE.Vector3(0, 3, 2), new THREE.Vector3(5, 0, 2));
+            const tubeGeo = new THREE.TubeGeometry(wireCurve, 20, 0.15, 8, false); const tubeMat = new THREE.MeshStandardMaterial({ color: 0xb87333, metalness: 0.9, roughness: 0.2 });
+            const innerWire = new THREE.Mesh(tubeGeo, tubeMat); innerWire.visible = false; group.add(innerWire); parts.innerWire = innerWire;
+
+            // 极板
+            const plateGeo = new THREE.BoxGeometry(2.5, 4.5, 8);
+            const plateMatL = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 }); const innerPlateL = new THREE.Mesh(plateGeo, plateMatL); innerPlateL.position.set(-5, -2.5, 2); innerPlateL.visible = false; group.add(innerPlateL); parts.innerPlateL = innerPlateL;
+            const plateMatR = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 }); const innerPlateR = new THREE.Mesh(plateGeo, plateMatR); innerPlateR.position.set(5, -2.5, 2); innerPlateR.visible = false; group.add(innerPlateR); parts.innerPlateR = innerPlateR;
+
+            createText(" ", "#ffffff", -5, -1.0, 6.5, 50, "innerPlateLText", group); createText(" ", "#ffffff", 5, -1.0, 6.5, 50, "innerPlateRText", group); createText(" ", "#ffffff", 0, -1.0, 6.5, 50, "innerSolText", group);
+
+            // ================= 新增：3D物理小灯泡（视觉沉浸） =================
+            const bulbGroup = new THREE.Group();
+            bulbGroup.position.set(0, 3.0, 2); // 导线顶部偏下一点
+            
+            // 灯口底座
+            const bulbBaseMat = new THREE.MeshStandardMaterial({color: 0x888888, metalness: 0.9, roughness: 0.4});
+            const bulbBase = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 16), bulbBaseMat);
+            bulbBase.position.y = -0.15;
+            bulbGroup.add(bulbBase);
+
+            // 玻璃灯泡与发光材质
+            const bulbGlassMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff, transmission: 0.9, opacity: 1, transparent: true,
+                roughness: 0.1, emissive: 0xffaa00, emissiveIntensity: 3.0
+            });
+            const bulbGlass = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), bulbGlassMat);
+            bulbGlass.position.y = 0.3;
+            bulbGroup.add(bulbGlass);
+            parts.bulbGlass = bulbGlass;
+
+            // 内部真实光源
+            const bulbLight = new THREE.PointLight(0xffaa00, 3, 15);
+            bulbLight.position.y = 0.3;
+            bulbGroup.add(bulbLight);
+            parts.bulbLight = bulbLight;
+            
+            group.add(bulbGroup);
+            // ==============================================================
+
+            const originVec = new THREE.Vector3(-7, -5, -3); 
+            createArrow(new THREE.Vector3(0, 1, 0), originVec, 11, 0xd1d5db); createText("物质\n维度", "#ffffff", -7, 8.0, -3, 60, null, group); 
+            createArrow(new THREE.Vector3(1, 0, 0), originVec, 20, 0xd1d5db); createText("装置\n维度", "#ffffff", 14.5, -5, -3, 60, null, group);
+            createArrow(new THREE.Vector3(0, 0, 1), originVec, 14, 0xd1d5db); createText("能量\n维度", "#ffffff", -7, -6.5, 12, 60, null, group);
+            createText("高自由能G1", "#fcd34d", -7, -6.5, 0, 60, "g1_label", group); createText("低自由能G2", "#fcd34d", -7, -6.5, 6, 60, "g2_label", group);
+            createArrow(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 2.8, 0), 9, 0xfcd34d, 1.2, 0.6); createText("化学能", "#fcd34d", 0, 4.0, 0, 60, null, group); createText("电能", "#fcd34d", 0, 4.0, 9, 60, null, group);    
+            createText("电势低", "#d1d5db", -5, 4.0, 0, 60, null, group); createText("电势高", "#d1d5db", 5, 4.0, 0, 60, null, group);
+            createArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-4.5, 0.5, 0), 9, 0x93c5fd); createText("电子转移", "#93c5fd", 0, 1.5, 0, 60, null, group);
+
+            parts.cations = []; parts.anions = [];
+            const particleGeo = new THREE.SphereGeometry(0.12, 8, 8);
+            const cationMat = new THREE.MeshBasicMaterial({ color: 0xff7777 }); const anionMat = new THREE.MeshBasicMaterial({ color: 0xc084fc });  
+            for(let i=0; i<40; i++) {
+                const cMesh = new THREE.Mesh(particleGeo, cationMat); cMesh.position.set((Math.random()-0.5)*5.6, -4.5 + Math.random()*4, -2.5 + Math.random()*9);
+                group.add(cMesh); parts.cations.push({ mesh: cMesh, speed: 0.01 + Math.random()*0.02 });
+                const aMesh = new THREE.Mesh(particleGeo, anionMat); aMesh.position.set((Math.random()-0.5)*5.6, -4.5 + Math.random()*4, -2.5 + Math.random()*9);
+                group.add(aMesh); parts.anions.push({ mesh: aMesh, speed: 0.01 + Math.random()*0.02 });
+            }
+
+            createText("阴离子", "#c084fc", 0, -1.2, 3.5, 50, "anion_text", group); createArrow(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(1.5, -2.0, 3.5), 3, 0xc084fc, 0.6, 0.4);
+            createText("阳离子", "#f87171", 0, -3.2, 3.5, 50, "cation_text", group); createArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1.5, -4.0, 3.5), 3, 0xf87171, 0.6, 0.4);
+
+            const eGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            const eMat = new THREE.MeshStandardMaterial({ color: 0xffff66, emissive: 0xffff66, emissiveIntensity: 2.0 }); 
+            parts.electrons = [];
+            for(let i=0; i<8; i++) { const eMesh = new THREE.Mesh(eGeo, eMat); eMesh.position.set(0, 1.25, 2); group.add(eMesh); parts.electrons.push({ mesh: eMesh, offset: i / 8 }); }
+
+            createText("电子转移", "#93c5fd", -8.5, 2.0, -3, 60, "electron_transfer_label", group); createText("电极\n反应物", "#6ee7b7", -8.5, -1.0, -3, 60, "electrode_reactants", group); 
+            createText("离子迁移", "#f87171", -8.5, -3.0, -3, 60, "ion_migration_label", group); createText("电极\n产物", "#6ee7b7", -8.5, -5.0, -3, 60, "electrode_products", group);
+            const pReactL = new THREE.Vector3(-5, -1.8, 0), pProdL = new THREE.Vector3(-5, -3.8, 6); createArrow(pProdL.clone().sub(pReactL), pReactL, pProdL.clone().sub(pReactL).length(), 0x6ee7b7);
+            createText(instanceData.abstract.reductant, "#6ee7b7", -5, -1.0, 0, 60, "reductant", group); createText(instanceData.abstract.oxProd, "#6ee7b7", -5, -5.5, 6, 60, "ox_product", group); 
+            const pReactR = new THREE.Vector3(5, -1.8, 0), pProdR = new THREE.Vector3(5, -3.8, 6); createArrow(pProdR.clone().sub(pReactR), pReactR, pProdR.clone().sub(pReactR).length(), 0x6ee7b7);
+            createText(instanceData.abstract.oxidant, "#6ee7b7", 5, -1.0, 0, 60, "oxidant", group); createText(instanceData.abstract.redProd, "#6ee7b7", 5, -5.5, 6, 60, "red_product", group); 
+            
+            const bottomTextY = -7.2;
+            createText(instanceData.abstract.negMat, "#6ee7b7", -5, bottomTextY, -3, 60, "neg_material_text", group); createText(instanceData.abstract.eCond, "#93c5fd", -2, bottomTextY, -3, 60, "electron_conductor_text", group); 
+            createText(instanceData.abstract.ionCond, "#f87171", 1.5, bottomTextY, -3, 60, "ion_conductor_text", group); createText(instanceData.abstract.posMat, "#6ee7b7", 5, bottomTextY, -3, 60, "pos_material_text", group);
+
+            const eqY = 11;
+            createText("还原剂", "#6ee7b7", -11, eqY, 0, 55, "eq_reductant", group); createText("+", "#ffffff", -8, eqY, 0, 55, null, group);
+            createText("氧化剂", "#6ee7b7", -5, eqY, 0, 55, "eq_oxidant", group); createText("=", "#ffffff", -2, eqY, 0, 55, null, group);
+            createText("氧化产物", "#6ee7b7", 2.5, eqY, 0, 55, "eq_ox_product", group); createText("+", "#ffffff", 6.5, eqY, 0, 55, "eq_plus_2", group); 
+            createText("还原产物", "#6ee7b7", 10.5, eqY, 0, 55, "eq_red_product", group); createText("ΔG=G2-G1＜0", "#fcd34d", 17, eqY, 0, 45, "eq_g_diff", group);
+        }
+        buildModel();
+
+        // === 6. UI 事件交互 ===
+        // 核心开关逻辑（含视觉沉浸灯泡控制）
+        const btnSwitch = document.getElementById('btn-switch');
+        const meterNeedle = document.getElementById('meter-needle');
+        const meterText = document.getElementById('meter-text');
+        
+        btnSwitch.addEventListener('click', () => {
+            animState.isCircuitClosed = !animState.isCircuitClosed;
+            if (animState.isCircuitClosed) {
+                btnSwitch.className = "btn-switch"; btnSwitch.innerText = "🟢 电路闭合 (通电)";
+                meterText.className = "hud-text";
+                ambientLight.intensity = 0.8; 
+                parts.bulbGlass.material.emissiveIntensity = 3.0; // 点亮灯泡
+                parts.bulbLight.intensity = 3.0;
+            } else {
+                btnSwitch.className = "btn-switch off"; btnSwitch.innerText = "🔴 电路断开 (断路)";
+                meterText.className = "hud-text off"; meterText.innerText = "I: 0.00A";
+                meterNeedle.style.transform = "translateX(-50%) rotate(-60deg)";
+                ambientLight.intensity = 0.3; // 断路时场景大幅变暗
+                parts.bulbGlass.material.emissiveIntensity = 0; // 熄灭灯泡
+                parts.bulbLight.intensity = 0;
+            }
+        });
+
+        // 盲盒自测逻辑
+        const btnTest = document.getElementById('btn-test');
+        btnTest.addEventListener('click', () => {
+            animState.isTestMode = !animState.isTestMode;
+            if(animState.isTestMode) {
+                btnTest.className = "btn-test on"; btnTest.innerText = "✅ 盲盒自测 (开)";
+            } else {
+                btnTest.className = "btn-test"; btnTest.innerText = "❓ 盲盒自测 (关)";
+            }
+            refreshLabelsForMode();
+        });
+
+        document.getElementById('instance-select').addEventListener('change', (e) => {
+            const key = e.target.value; animState.currentModel = key; const data = instanceData[key];
+            
+            refreshLabelsForMode(); // 更新标签，如果是盲盒模式则保持问号
+
+            updateSpriteText('eq_reductant', data.reductant, "#6ee7b7"); updateSpriteText('eq_oxidant', data.oxidant, "#6ee7b7");
+            updateSpriteText('eq_ox_product', data.oxProd, "#6ee7b7"); updateSpriteText('eq_red_product', data.redProd, "#6ee7b7");
+            parts.eq_plus_2.visible = (data.redProd.trim() !== "");
+            updateSpriteText('anion_text', data.anionName, "#c084fc"); updateSpriteText('cation_text', data.cationName, "#f87171");
+
+            if (key === 'abstract') {
+                parts.innerWire.visible = false; parts.innerPlateL.visible = false; parts.innerPlateR.visible = false; parts.redCube.material.color.setHex(0xdc2626); 
+                updateSpriteText('innerPlateLText', " ", "#ffffff"); updateSpriteText('innerPlateRText', " ", "#ffffff"); updateSpriteText('innerSolText', " ", "#ffffff");
+                parts.cations.forEach(p => p.mesh.visible = true); parts.anions.forEach(p => p.mesh.visible = true);
+            } else {
+                parts.innerWire.visible = true; parts.innerPlateL.visible = true; parts.innerPlateR.visible = true;
+                parts.innerPlateL.material.color.setHex(data.plateLColor); parts.innerPlateR.material.color.setHex(data.plateRColor); parts.redCube.material.color.setHex(data.solColor); 
+                updateSpriteText('innerPlateLText', data.plateLName, "#ffffff"); updateSpriteText('innerPlateRText', data.plateRName, "#ffffff"); updateSpriteText('innerSolText', data.solName, "#ffffff");
+                parts.cations.forEach(p => p.mesh.visible = false); parts.anions.forEach(p => p.mesh.visible = false);
+            }
+        });
+
+        // 沉浸导览
+        const tourPanel = document.getElementById('tour-panel');
+        document.getElementById('btn-tour').addEventListener('click', () => {
+            if(animState.isTouring) return; animState.isTouring = true; controls.enabled = false; tourPanel.style.display = 'block';
+            if(!animState.isCircuitClosed) btnSwitch.click(); // 强制闭合电路
+            
+            function tweenCamera(pos, target, duration) {
+                return new Promise(resolve => {
+                    new TWEEN.Tween(camera.position).to(pos, duration).easing(TWEEN.Easing.Cubic.InOut).start();
+                    new TWEEN.Tween(controls.target).to(target, duration).easing(TWEEN.Easing.Cubic.InOut).onComplete(resolve).start();
+                });
+            }
+            async function startTour() {
+                tourPanel.innerHTML = "<b>[1/3] 物质维度</b><br/>氧化还原反应发生，还原剂失电子，氧化剂得电子。";
+                await tweenCamera({x: -18, y: 2, z: 12}, {x: -7, y: -2, z: 0}, 3000); await new Promise(r => setTimeout(r, 2000));
+                tourPanel.innerHTML = "<b>[2/3] 装置维度</b><br/>电子由外电路流转，阴阳离子在内部通道定向迁移。";
+                await tweenCamera({x: 0, y: -2, z: 25}, {x: 0, y: -2.5, z: 2}, 3000); await new Promise(r => setTimeout(r, 3000));
+                tourPanel.innerHTML = "<b>[3/3] 能量维度</b><br/>系统自由能降低，化学能被成功转化为电能输出，点亮灯泡。";
+                await tweenCamera({x: -5, y: 12, z: 28}, {x: -2, y: 0, z: 6}, 3000); await new Promise(r => setTimeout(r, 3000));
+                tourPanel.innerHTML = "<b>导览结束</b><br/>您可以开启【盲盒自测】模式，点击部件测试记忆。";
+                await tweenCamera({x: 0, y: 8, z: 40}, {x: 0, y: 0, z: 0}, 2000);
+                setTimeout(() => { tourPanel.style.display = 'none'; controls.enabled = true; animState.isTouring = false; }, 1500);
+            }
+            startTour();
+        });
+
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
+
+        const tooltip = document.getElementById('hover-tooltip');
+        function applyGlowAnimation(sprite, isGlowing, time) {
+            if(!sprite || sprite.scale.x < 0.01) return; 
+            if (isGlowing) {
+                const flashScale = 1.0 + Math.sin(time * 0.005) * 0.15; sprite.scale.copy(sprite.userData.baseScale).multiplyScalar(flashScale);
+                if (!sprite.userData.baseColor) sprite.userData.baseColor = sprite.material.color.clone();
+                sprite.material.color.copy(sprite.userData.baseColor).multiplyScalar(2.0); 
+            } else {
+                sprite.scale.lerp(sprite.userData.baseScale, 0.15); if (sprite.userData.baseColor) sprite.material.color.copy(sprite.userData.baseColor);
+            }
+        }
+
+        // === 8. 核心动画循环 ===
+        function animate(time) {
+            requestAnimationFrame(animate); TWEEN.update(time); 
+
+            // HUD 仪表盘波动
+            if (animState.isCircuitClosed) {
+                const fluctuation = Math.sin(time * 0.01) * 0.05 + Math.cos(time * 0.003) * 0.02;
+                const currentVal = (animState.baseCurrent + fluctuation).toFixed(2);
+                meterText.innerText = `I: ${currentVal}A`;
+                const angle = -60 + (currentVal / 2.0) * 120;
+                meterNeedle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+            }
+
+            let isHoveringNode = false;
+            let forceHighlightElectron = false, forceHighlightIon = false, forceG1 = false, forceG2 = false;
+
+            if (!animState.isTouring) {
+                raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(interactableObjects);
+                animState.redCube = 1.0; animState.blueCube = 1.0; animState.greenCubeL = 1.0; animState.greenCubeR = 1.0;
+                let tooltipText = ""; let tooltipPos = ""; let borderColor = "#3b82f6";
+
+                if (intersects.length > 0 && mouse.x !== -9999) {
+                    const name = intersects[0].object.userData.name; document.body.style.cursor = 'pointer'; isHoveringNode = true;
+                    
+                    // 【核心互动：盲盒揭晓】
+                    if (animState.isTestMode && testModeMapping[name]) {
+                        tooltipText = "<div style='color:#e879f9;font-size:11px;margin-bottom:3px;'>💡 盲盒揭晓</div>" + instanceData[animState.currentModel][testModeMapping[name]];
+                        tooltipPos = "bottom"; borderColor = "#e879f9";
+                        // 揭晓时稍微放大对应区块
+                        if(name.includes('pos_') || name === 'oxidant') animState.greenCubeR = 1.05;
+                        if(name.includes('neg_') || name === 'reductant') animState.greenCubeL = 1.05;
+                    } 
+                    // 【常态教学互动】
+                    else {
+                        if (name === 'ion_migration_label') { tooltipText = "阳离子(红)向正极，阴离子(紫)向负极"; tooltipPos = "left"; borderColor = "#f87171"; forceHighlightIon = true; } 
+                        else if (name === 'ion_conductor_text') { tooltipText = (animState.currentModel === 'abstract') ? "<div class='tooltip-title'>离子导体实例</div>溶液、盐桥、离子交换膜 等" : "承载离子迁移的内部通道"; tooltipPos = "bottom"; borderColor = "#ef4444"; animState.redCube = 1.05; forceHighlightIon = true; } 
+                        else if (name === 'electron_conductor_text') { tooltipText = (animState.currentModel === 'abstract') ? "<div class='tooltip-title'>电子导体实例</div>电极材料、导线、用电器 等" : "引导电子流转的外部通道"; tooltipPos = "bottom"; borderColor = "#60a5fa"; animState.blueCube = 1.05; forceHighlightElectron = true; } 
+                        else if (name === 'electron_transfer_label') { tooltipText = "电子由负极流出，经外电路注入正极"; tooltipPos = "left"; borderColor = "#60a5fa"; forceHighlightElectron = true; } 
+                        else if (name === 'pos_material_text') { if (animState.currentModel === 'abstract') tooltipText = "<div class='tooltip-title'>正极材料实例</div>不活泼金属、石墨棒等"; tooltipPos = "bottom"; borderColor = "#6ee7b7"; animState.greenCubeR = 1.05; } 
+                        else if (name === 'neg_material_text') { if (animState.currentModel === 'abstract') tooltipText = "<div class='tooltip-title'>负极材料实例</div>活泼金属材料、导电非金属等"; tooltipPos = "bottom"; borderColor = "#6ee7b7"; animState.greenCubeL = 1.05; } 
+                        else if (name === 'g1_label' || name === 'electrode_reactants') { forceG1 = true; } else if (name === 'g2_label' || name === 'electrode_products') { forceG2 = true; }
+                    }
+                } else { document.body.style.cursor = 'default'; }
+
+                if (tooltipText) {
+                    tooltip.innerHTML = tooltipText; tooltip.style.borderLeftColor = borderColor; tooltip.style.display = 'block';
+                    const offX = 25; const offY = -40; 
+                    if (tooltipPos === "right") { tooltip.style.left = (mouseX + offX) + 'px'; tooltip.style.top = (mouseY + offY) + 'px'; tooltip.style.transform = 'translate(0, -50%)'; } 
+                    else if (tooltipPos === "left") { tooltip.style.left = (mouseX - offX) + 'px'; tooltip.style.top = (mouseY + offY) + 'px'; tooltip.style.transform = 'translate(-100%, -50%)'; } 
+                    else if (tooltipPos === "bottom") { tooltip.style.left = mouseX + 'px'; tooltip.style.top = (mouseY + offY) + 'px'; tooltip.style.transform = 'translate(-50%, -100%)'; }
+                } else { tooltip.style.display = 'none'; }
+            }
+
+            const isActive = animState.isCircuitClosed || animState.isTouring;
+            const glowG1 = isActive || forceG1;
+            const glowG2 = isActive || forceG2;
+
+            parts.redCube.scale.lerp(new THREE.Vector3(animState.redCube, animState.redCube, animState.redCube), 0.15); parts.blueCube.scale.lerp(new THREE.Vector3(animState.blueCube, animState.blueCube, animState.blueCube), 0.15); parts.greenCubeL.scale.lerp(new THREE.Vector3(animState.greenCubeL, animState.greenCubeL, animState.greenCubeL), 0.15); parts.greenCubeR.scale.lerp(new THREE.Vector3(animState.greenCubeR, animState.greenCubeR, animState.greenCubeR), 0.15);
+
+            applyGlowAnimation(parts.oxidant, glowG1, time); applyGlowAnimation(parts.reductant, glowG1, time); applyGlowAnimation(parts.eq_oxidant, glowG1, time); applyGlowAnimation(parts.eq_reductant, glowG1, time);  
+            applyGlowAnimation(parts.ox_product, glowG2, time); applyGlowAnimation(parts.red_product, glowG2, time); applyGlowAnimation(parts.eq_ox_product, glowG2, time); applyGlowAnimation(parts.eq_red_product, glowG2, time); applyGlowAnimation(parts.eq_g_diff, glowG2, time);     
+
+            // 离子运动逻辑
+            if (animState.currentModel === 'abstract') {
+                const baseFlow = isActive ? 0.3 : 0; 
+                const flowSpeedMultiplier = (forceHighlightIon || animState.isTouring) ? 1.5 : baseFlow; 
+                parts.cations.forEach(p => { p.mesh.position.x += p.speed * flowSpeedMultiplier * 5; if (p.mesh.position.x > 2.8) p.mesh.position.x = -2.8; });
+                parts.anions.forEach(p => { p.mesh.position.x -= p.speed * flowSpeedMultiplier * 5; if (p.mesh.position.x < -2.8) p.mesh.position.x = 2.8; });
+            }
+
+            // 电子穿梭逻辑
+            const eCycle = time * 0.0015; 
+            parts.electrons.forEach(e => {
+                if (isActive || forceHighlightElectron) {
+                    e.mesh.visible = true;
+                    let progress = (eCycle + e.offset) % 1; e.mesh.position.x = -4.5 + progress * 9; e.mesh.position.y = 1.25 + Math.sin(progress * Math.PI) * 0.5;
+                } else { e.mesh.visible = false; }
+            });
+
+            controls.update(); composer.render();
+        }
+        
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
