@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>化学反应与电能</title>
+    <style>
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background: linear-gradient(135deg, #e6e9f0 0%, #eef1f5 100%);
+            font-family: 'Microsoft YaHei', -apple-system, sans-serif;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .app-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            outline: none;
+        }
+
+        /* 概念图UI - 标题样式优化 */
+        #home-ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .home-title {
+            font-size: 36px;
+            font-weight: 800;
+            color: #2c3e50;
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #2c3e50, #1a2632);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 0;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+
+        /* 删除原副标题相关样式，不再需要 */
+
+        #tooltip {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 50, 100, 0.15);
+            color: #333;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            transform: translate(-50%, -100%);
+            z-index: 20;
+            max-width: 280px;
+            text-align: left;
+        }
+
+        .tooltip-title {
+            font-weight: bold;
+            color: #2B4A87;
+            margin-bottom: 8px;
+            font-size: 16px;
+            border-bottom: 2px solid #e0e5f0;
+            padding-bottom: 4px;
+        }
+
+        .tooltip-desc {
+            color: #555;
+            margin-bottom: 8px;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+
+        .tooltip-eq {
+            font-family: 'Consolas', monospace;
+            background: #f4f7fb;
+            padding: 8px;
+            border-radius: 6px;
+            color: #d32f2f;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .tooltip-hint {
+            font-size: 12px;
+            color: #10b981;
+            font-weight: bold;
+            margin-top: 8px;
+            text-align: right;
+            animation: pulseHint 1.5s infinite;
+        }
+
+        @keyframes pulseHint {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* 电镀铜UI (保留原有样式，未修改) */
+        #plate-ui-layer {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            pointer-events: none;
+            z-index: 60;
+        }
+
+        .plate-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-shadow: 0px 2px 4px rgba(255, 255, 255, 0.8);
+            margin-bottom: 10px;
+        }
+
+        .global-back-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: auto;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .global-back-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tour-btn {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            pointer-events: auto;
+        }
+
+        .tour-subtitle {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 20px;
+            font-size: 15px;
+            z-index: 100;
+            text-align: center;
+            width: 85%;
+            line-height: 1.5;
+            display: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .plate-floating-label,
+        .eq-floating-label,
+        .plate-power-source,
+        .plate-electron-flow {
+            position: absolute;
+            pointer-events: none;
+            z-index: 20;
+            display: none;
+            white-space: nowrap;
+        }
+
+        .plate-floating-label {
+            background: rgba(255, 255, 255, 0.85);
+            padding: 3px 6px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #1e293b;
+            font-size: 11px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+        }
+
+        .eq-floating-label {
+            background: rgba(248, 250, 252, 0.95);
+            padding: 5px 8px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            font-size: 12px;
+            font-weight: bold;
+            color: #475569;
+            transform: translate(-50%, -50%);
+        }
+
+        .eq-floating-label.anode {
+            border-left: 4px solid #f59e0b;
+        }
+
+        .eq-floating-label.cathode {
+            border-left: 4px solid #10b981;
+        }
+
+        .plate-power-source {
+            background: #ef4444;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+        }
+
+        .plate-electron-flow {
+            color: #d97706;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+            transform: translate(-50%, -50%);
+        }
+
+        .plate-controls {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 30;
+            display: none;
+        }
+
+        .plate-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            pointer-events: auto;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .hud-panel {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(15, 23, 42, 0.85);
+            color: #38bdf8;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            border: 1px solid #334155;
+            pointer-events: none;
+        }
+
+        .sliders-panel {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 150px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e2e8f0;
+            pointer-events: auto;
+        }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            font-size: 11px;
+            font-weight: bold;
+            color: #334155;
+        }
+
+        .slider-row input {
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        .chart-panel {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 50;
+            border: 1px solid #334155;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 12px;
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 4px;
+        }
+
+        .chart-legend {
+            display: flex;
+            justify-content: space-around;
+            font-size: 10px;
+            margin-top: 4px;
+            color: #fff;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .legend-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }
+
+        #trendChart {
+            width: 160px;
+            height: 80px;
+        }
+
+        #orientation-tip {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10000;
+            font-size: 20px;
+            text-align: center;
+            backdrop-filter: blur(8px);
+            font-family: sans-serif;
+            pointer-events: auto;
+        }
+
+        #orientation-tip .tip-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: rotateTip 1.5s infinite ease-in-out;
+        }
+
+        @keyframes rotateTip {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(90deg); }
+        }
+    </style>
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.umd.js"></script>
+</head>
+<body>
+    <!-- 概念图主界面 -->
+    <div id="home-wrapper" class="app-wrapper">
+        <div id="home-ui-layer">
+            <div class="home-title">化学反应与电能</div>
+            <!-- 副标题已删除 -->
+        </div>
+        <div id="tooltip"></div>
+        <!-- 原退出漫游按钮已删除 -->
+        <div id="home-canvas-container"></div>
+    </div>
+
+    <!-- 电镀铜容器（保留，但原内部切换已移除，仅用于独立页面） -->
+    <div id="plate-wrapper" class="app-wrapper" style="display: none;">
+        <div id="plate-ui-layer">
+            <button id="btn-back-home" class="global-back-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                返回知识图谱
+            </button>
+            <div class="plate-title">虚拟实验：电镀铜</div>
+            <div><button id="btn-tour" class="tour-btn">🎬 播放智能导览</button></div>
+        </div>
+        <div id="tour-subtitle" class="tour-subtitle"></div>
+        <div id="plate-canvas-container"></div>
+    </div>
+
+    <!-- 强制横屏提示层 -->
+    <div id="orientation-tip" style="display: none;">
+        <div class="tip-icon">📱 ⟳</div>
+        <div>请将设备旋转为横屏模式<br>以获得最佳体验</div>
+    </div>
+
+    <script>
+        // 全局跳转函数（兼容 Android WebView）
+        function gotoPage(page) {
+            let currentPath = window.location.pathname;
+            let baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            let targetUrl = baseDir + page;
+            
+            let debugDiv = document.createElement('div');
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.bottom = '100px';
+            debugDiv.style.left = '10px';
+            debugDiv.style.background = 'rgba(0,0,0,0.7)';
+            debugDiv.style.color = 'white';
+            debugDiv.style.padding = '8px';
+            debugDiv.style.borderRadius = '8px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.innerText = '跳转到: ' + targetUrl;
+            document.body.appendChild(debugDiv);
+            setTimeout(() => debugDiv.remove(), 1500);
+            
+            window.location.href = targetUrl;
+        }
+
+        // ==========================================
+        // 全局应用状态管理器（仅用于 resize）
+        // ==========================================
+        const App = {
+            resizeHome: null
+        };
+
+        window.addEventListener('resize', () => {
+            if (App.resizeHome) App.resizeHome();
+        });
+
+        // ==========================================
+        // 电化学概念图 (Home) - 完整代码，仅保留概念图部分
+        // ==========================================
+        (function createHomeScene() {
+            const container = document.getElementById('home-canvas-container');
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, -5, 45);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 100;
+            controls.minDistance = 5;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 20);
+            scene.add(dirLight);
+
+            // 全息网格与粒子
+            const gridHelper = new THREE.GridHelper(200, 100, 0x00ffff, 0x113355);
+            gridHelper.position.z = -1.5;
+            gridHelper.rotation.x = Math.PI / 2;
+            gridHelper.material.opacity = 0.3;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+
+            const pGeo = new THREE.BufferGeometry();
+            const pPos = new Float32Array(3000);
+            for (let i = 0; i < 3000; i += 3) {
+                pPos[i] = (Math.random() - 0.5) * 100;
+                pPos[i + 1] = (Math.random() - 0.5) * 100;
+                pPos[i + 2] = (Math.random() - 0.5) * 40 - 10;
+            }
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+            const particlesMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0x88ccff, size: 0.15, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending }));
+            scene.add(particlesMesh);
+
+            const interactableNodes = [];
+            const pulseLines = [];
+            let isFocusMode = false;
+
+            const tooltipData = {
+                'chlor': { title: '氯碱工业', desc: '电解饱和食盐水制取烧碱、氯气和氢气。', eq: '2NaCl + 2H₂O ═ 2NaOH + H₂↑ + Cl₂↑' },
+                'plate': { title: '电镀', desc: '利用电解原理在金属表面镀上一层其他金属。', eq: '阳极: M - ne⁻ ═ Mⁿ⁺<br>阴极: Mⁿ⁺ + ne⁻ ═ M' },
+                'refine': { title: '电解精炼', desc: '提纯含有杂质的金属（如粗铜提纯）。', eq: '阳极(粗): Cu - 2e⁻ ═ Cu²⁺<br>阴极(纯): Cu²⁺ + 2e⁻ ═ Cu' },
+                'metal': { title: '电冶金', desc: '电解熔融盐或氧化物冶炼活泼金属。', eq: '2Al₂O₃(熔) ═ 4Al + 3O₂↑' },
+                'lead': { title: '铅酸蓄电池', desc: '常见的二次电池，放电时化学能转电能。', eq: 'Pb+PbO₂+2H₂SO₄ ⇌ 2PbSO₄+2H₂O' },
+                'fuel': { title: '燃料电池', desc: '燃料和氧化剂化学能直接转化为电能。', eq: '总反应: 2H₂ + O₂ ═ 2H₂O' },
+                'corrosion': { title: '电化学腐蚀', desc: '不纯金属与电解质溶液形成原电池反应。', eq: '吸氧腐蚀: O₂+2H₂O+4e⁻ ═ 4OH⁻' },
+                'elec_cell': { title: '电解池', desc: '将外加电能转化为化学能的装置。', eq: '非自发氧化还原 (ΔG > 0)' },
+                'galv_cell': { title: '原电池', desc: '将内部化学能自发转化为电能的装置。', eq: '自发氧化还原 (ΔG < 0)' },
+                'et3': { title: '竞争放电', desc: '电解时，溶液中多种离子在电极上放电的顺序。', eq: '阳极放电顺序: S²⁻ > I⁻ > Br⁻ > Cl⁻ > OH⁻ > 含氧酸根<br>阴极放电顺序: Ag⁺ > Cu²⁺ > H⁺ > Na⁺ > ...' },
+                'li': { title: '锂电池', desc: '以锂为负极的电池，能量密度高。', eq: 'Li + MnO₂ ═ LiMnO₂' },
+                'zn': { title: '锌锰干电池', desc: '常见的一次电池，负极锌，正极碳棒。', eq: 'Zn + 2MnO₂ + 2NH₄Cl ═ Zn(NH₃)₂Cl₂ + Mn₂O₃ + H₂O' }
+            };
+
+            const nodes = [
+                { id: 'rxn', text: '化学反应', x: -3.5, y: 0, w: 3.5, h: 1.2, type: 'dashed' }, { id: 'energy', text: '电能', x: 3.5, y: 0, w: 3.5, h: 1.2, type: 'dashed' },
+                { id: 'eq', text: '方程式书写', x: -9.5, y: 0, w: 5, h: 1.2, type: 'solid' }, { id: 'elec_cell', text: '电解池', x: 0, y: 4, w: 3, h: 1.2, type: 'solid' },
+                { id: 'cog_top', text: '认知模型', x: -6, y: 7, w: 3, h: 1.2, type: 'solid' }, { id: 'ind_app', text: '工业应用', x: 5.5, y: 7, w: 3, h: 1.2, type: 'solid' },
+                { id: 'plate', text: '电镀', x: 9.5, y: 12.5, w: 2.5, h: 1, type: 'solid' }, { id: 'refine', text: '电解精炼', x: 10, y: 10, w: 3, h: 1, type: 'solid' },
+                { id: 'metal', text: '电冶金', x: 10, y: 7.5, w: 3, h: 1, type: 'solid' }, { id: 'chlor', text: '氯碱工业', x: 9.5, y: 5, w: 3, h: 1, type: 'solid' },
+                { id: 'elec_think', text: '认识思路', x: -6, y: 4, w: 3, h: 1.2, type: 'solid' },
+                { id: 'et1', text: '离子种类分析', x: -11, y: 5, w: 3.2, h: 0.8, type: 'logic_green' }, { id: 'et2', text: '分析离子迁移', x: -15, y: 5, w: 3.2, h: 0.8, type: 'logic_green' },
+                { id: 'et3', text: '竞争放电', x: -18.5, y: 5, w: 2.5, h: 0.8, type: 'logic_pink' }, { id: 'et4', text: '反应书写', x: -22, y: 5, w: 3, h: 0.8, type: 'logic_pink' },
+                { id: 'galv_cell', text: '原电池', x: 0, y: -4, w: 3, h: 1.2, type: 'solid' }, { id: 'cog_bot', text: '认知模型', x: -6, y: -7, w: 3, h: 1.2, type: 'solid' },
+                { id: 'power', text: '化学电源', x: 5.5, y: -7, w: 3, h: 1.2, type: 'solid' }, { id: 'lead', text: '铅酸蓄电池', x: 10, y: -5, w: 3.5, h: 1, type: 'solid' },
+                { id: 'li', text: '锂电池', x: 10.5, y: -6.5, w: 3, h: 1, type: 'solid' }, { id: 'zn', text: '锌锰干电池', x: 10.5, y: -8, w: 3.5, h: 1, type: 'solid' },
+                { id: 'fuel', text: '燃料电池', x: 10, y: -9.5, w: 3, h: 1, type: 'solid' }, { id: 'galv_think', text: '认识思路', x: -6, y: -4, w: 3, h: 1.2, type: 'solid' },
+                { id: 'gt1', text: '析本质定电极', x: -11.5, y: -5, w: 3.5, h: 0.8, type: 'logic_green' }, { id: 'gt2', text: '写骨架明得失', x: -15.5, y: -5, w: 3.5, h: 0.8, type: 'logic_green' },
+                { id: 'gt3', text: '观介质平电荷', x: -19.5, y: -5, w: 3.5, h: 0.8, type: 'logic_pink' }, { id: 'gt4', text: '补物质查守恒', x: -23.5, y: -5, w: 3.5, h: 0.8, type: 'logic_pink' },
+                { id: 'corrosion', text: '金属腐蚀与防护', x: 11, y: 0, w: 5.5, h: 1.2, type: 'solid' },
+                { id: 'prot1', text: '外加电流', x: 16.5, y: 1.5, w: 3, h: 1, type: 'solid' }, { id: 'prot2', text: '牺牲阳极', x: 16.5, y: -1.5, w: 3, h: 1, type: 'solid' },
+                { id: 'label_top', text: '调控(ΔG>0)', x: 0, y: 0.8, w: 4, h: 1, type: 'text' }, { id: 'label_bot', text: '自发(ΔG<0)', x: 0, y: -0.8, w: 4, h: 1, type: 'text' }
+            ];
+
+            const rawPaths = [
+                { points: [[1.75, 0.4, 0], [-1.75, 0.4, 0]], color: 0x222222 }, { points: [[-1.75, -0.4, 0], [1.75, -0.4, 0]], color: 0x222222 },
+                { points: [[0, 1.2, 0], [0, 3.4, 0]], color: 0xE60000 }, { points: [[0, -1.2, 0], [0, -3.4, 0]], color: 0xE60000 },
+                { points: [[-5.25, 0, 0], [-6.75, 0, 0]], color: 0x222222 },
+                { points: [[-1.5, 4.6, 0], [-4.5, 6.4, 0]], color: 0x222222 }, { points: [[1.5, 4.6, 0], [4, 6.4, 0]], color: 0x222222 },
+                { points: [[7, 7, 0], [8.25, 12.5, 0]], color: 0x222222 }, { points: [[7, 7, 0], [8.5, 10, 0]], color: 0x222222 },
+                { points: [[7, 7, 0], [8.5, 7.5, 0]], color: 0x222222 }, { points: [[7, 7, 0], [8.0, 5, 0]], color: 0x222222 },
+                { points: [[-1.5, 4, 0], [-4.5, 4, 0]], color: 0x222222 }, { points: [[-6, 3.4, 0], [-8, 0.6, 0]], color: 0x222222 },
+                { points: [[-8, 0.6, 0], [-6, 3.4, 0]], color: 0x222222 }, { points: [[-7.5, 4, 0], [-9.4, 5, 0]], color: 0x222222 },
+                { points: [[-12.6, 5, 0], [-13.4, 5, 0]], color: 0x8FBC8F }, { points: [[-16.6, 5, 0], [-17.25, 5, 0]], color: 0x8FBC8F },
+                { points: [[-19.75, 5, 0], [-20.5, 5, 0]], color: 0x8FBC8F },
+                { points: [[-1.5, -4.6, 0], [-4.5, -6.4, 0]], color: 0x222222 }, { points: [[1.5, -4.6, 0], [4, -6.4, 0]], color: 0x222222 },
+                { points: [[7, -7, 0], [8.25, -5, 0]], color: 0x222222 }, { points: [[7, -7, 0], [9, -6.5, 0]], color: 0x222222 },
+                { points: [[7, -7, 0], [8.75, -8, 0]], color: 0x222222 }, { points: [[7, -7, 0], [8.5, -9.5, 0]], color: 0x222222 },
+                { points: [[-1.5, -4, 0], [-4.5, -4, 0]], color: 0x222222 }, { points: [[-6, -3.4, 0], [-8, -0.6, 0]], color: 0x222222 },
+                { points: [[-8, -0.6, 0], [-6, -3.4, 0]], color: 0x222222 }, { points: [[-7.5, -4, 0], [-9.75, -5, 0]], color: 0x222222 },
+                { points: [[-13.25, -5, 0], [-13.75, -5, 0]], color: 0x8FBC8F }, { points: [[-17.25, -5, 0], [-17.75, -5, 0]], color: 0x8FBC8F },
+                { points: [[-21.25, -5, 0], [-21.75, -5, 0]], color: 0x8FBC8F },
+                { points: [[1.5, 4, 0], [11, 4, 0], [11, 0.6, 0]], color: 0x222222 }, { points: [[1.5, -4, 0], [11, -4, 0], [11, -0.6, 0]], color: 0x222222 },
+                { points: [[13.75, 0, 0], [15.0, 1.5, 0]], color: 0x222222 }, { points: [[13.75, 0, 0], [15.0, -1.5, 0]], color: 0x222222 }
+            ];
+
+            function createNodeTexture(node) {
+                const res = 256;
+                const canvas = document.createElement('canvas');
+                canvas.width = node.w * res;
+                canvas.height = node.h * res;
+                const ctx = canvas.getContext('2d');
+                const r = 0.2 * res;
+                const w = canvas.width, h = canvas.height;
+                if (node.type !== 'text') {
+                    ctx.beginPath();
+                    ctx.moveTo(r, 4);
+                    ctx.lineTo(w - r, 4);
+                    ctx.quadraticCurveTo(w - 4, 4, w - 4, r);
+                    ctx.lineTo(w - 4, h - r);
+                    ctx.quadraticCurveTo(w - 4, h - 4, w - r, h - 4);
+                    ctx.lineTo(r, h - 4);
+                    ctx.quadraticCurveTo(4, h - 4, 4, h - r);
+                    ctx.lineTo(4, r);
+                    ctx.quadraticCurveTo(4, 4, r, 4);
+                    ctx.closePath();
+                }
+                if (node.id === 'elec_think' || node.id === 'galv_think' || node.type === 'solid') {
+                    ctx.fillStyle = '#4B74C2';
+                    ctx.fill();
+                    ctx.strokeStyle = '#2B4A87';
+                    ctx.lineWidth = 6;
+                    ctx.stroke();
+                    ctx.fillStyle = '#FFF';
+                } else if (node.type === 'dashed') {
+                    ctx.fillStyle = '#FFF';
+                    ctx.fill();
+                    ctx.lineWidth = 5;
+                    ctx.setLineDash([15, 15]);
+                    ctx.strokeStyle = '#222';
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#000';
+                } else if (node.type === 'logic_green') {
+                    ctx.fillStyle = '#F4FAEB';
+                    ctx.fill();
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#5E7A8A';
+                    ctx.stroke();
+                    ctx.fillStyle = '#333';
+                } else if (node.type === 'logic_pink') {
+                    ctx.fillStyle = '#FDF2F4';
+                    ctx.fill();
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#5E7A8A';
+                    ctx.stroke();
+                    ctx.fillStyle = '#333';
+                } else {
+                    ctx.fillStyle = '#000';
+                }
+
+                let fontSize = Math.min(0.45 * res, (w - 40) / (node.text.length));
+                ctx.font = `bold ${fontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.text, w / 2, h / 2 + 0.05 * res);
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                return texture;
+            }
+
+            nodes.forEach(node => {
+                const texture = createNodeTexture(node);
+                let mesh;
+                if (node.type === 'text') {
+                    mesh = new THREE.Mesh(new THREE.PlaneGeometry(node.w, node.h), new THREE.MeshBasicMaterial({ map: texture, transparent: true }));
+                    mesh.position.set(node.x, node.y, 0.2);
+                } else {
+                    const geo = new THREE.BoxGeometry(node.w, node.h, 0.2);
+                    const matS = new THREE.MeshStandardMaterial({ color: (node.type === 'solid' || node.id.includes('think')) ? 0x4B74C2 : (node.type === 'logic_green' ? 0xF4FAEB : (node.type === 'logic_pink' ? 0xFDF2F4 : 0xFFFFFF)), roughness: 0.6, transparent: true });
+                    const matF = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.6, transparent: true });
+                    mesh = new THREE.Mesh(geo, [matS, matS, matS, matS, matF, matF]);
+                    mesh.position.set(node.x, node.y, 0);
+                }
+                mesh.userData = { id: node.id, baseZ: mesh.position.z, randomPhase: Math.random() * Math.PI * 2, isHovered: false, isText: node.type === 'text' };
+                interactableNodes.push(mesh);
+                scene.add(mesh);
+            });
+
+            rawPaths.forEach(p => {
+                const pts = p.points.map(v => new THREE.Vector3(...v));
+                let cDist = 0;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const start = pts[i], end = pts[i + 1], segLen = start.distanceTo(end);
+                    if (i > 0) {
+                        const s = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshStandardMaterial({ color: p.color }));
+                        s.position.copy(start);
+                        s.position.z = -0.1;
+                        scene.add(s);
+                    }
+                    const dir = new THREE.Vector3().subVectors(end, start).normalize();
+                    const lineMat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.7, emissive: p.color, emissiveIntensity: 0, transparent: true });
+
+                    if (i === pts.length - 2) {
+                        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.5, 16), lineMat);
+                        cone.position.copy(new THREE.Vector3().copy(end).addScaledVector(dir, -0.25));
+                        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+                        cone.position.z = -0.1;
+                        cone.userData.dist = cDist + segLen;
+                        pulseLines.push(cone);
+                        scene.add(cone);
+                        if (segLen > 0.5) {
+                            const line = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, segLen - 0.5, 8), lineMat);
+                            line.position.copy(new THREE.Vector3().copy(start).addScaledVector(dir, (segLen - 0.5) / 2));
+                            line.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+                            line.position.z = -0.1;
+                            line.userData.dist = cDist + (segLen - 0.5) / 2;
+                            pulseLines.push(line);
+                            scene.add(line);
+                        }
+                    } else {
+                        const line = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, segLen, 8), lineMat);
+                        line.position.copy(new THREE.Vector3().copy(start).addScaledVector(dir, segLen / 2));
+                        line.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+                        line.position.z = -0.1;
+                        line.userData.dist = cDist + segLen / 2;
+                        pulseLines.push(line);
+                        scene.add(line);
+                    }
+                    cDist += segLen;
+                }
+            });
+
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            let lastTapTime = 0;
+            let tapTimeout;
+            const tooltipEl = document.getElementById('tooltip');
+
+            function showTooltip(node, x, y) {
+                const data = tooltipData[node.userData.id];
+                if (!data) return;
+                let hintText = '';
+                // 根据节点id显示不同的提示
+                if (node.userData.id === 'plate') hintText = '✨ 双击进入电镀铜虚拟实验';
+                else if (node.userData.id === 'li') hintText = '🔋 双击查看锂电池3D演示';
+                else if (['elec_cell', 'galv_cell', 'et3', 'refine', 'metal', 'chlor', 'lead', 'zn', 'fuel'].includes(node.userData.id)) hintText = '👉 双击跳转至详细页面';
+                else hintText = '👉 双击聚焦节点';
+                tooltipEl.innerHTML = `<div class="tooltip-title">${data.title}</div><div class="tooltip-desc">${data.desc}</div><div class="tooltip-eq">${data.eq}</div><div class="tooltip-hint">${hintText}</div>`;
+                let px = x, py = y - 60;
+                if (px < 150) px = 150;
+                if (px > window.innerWidth - 150) px = window.innerWidth - 150;
+                if (py < 100) py = y + 80;
+                tooltipEl.style.left = `${px}px`;
+                tooltipEl.style.top = `${py}px`;
+                tooltipEl.style.opacity = 1;
+                interactableNodes.forEach(n => n.userData.isHovered = (n === node));
+            }
+
+            function hideTooltip() {
+                tooltipEl.style.opacity = 0;
+                interactableNodes.forEach(n => n.userData.isHovered = false);
+            }
+
+            function focusOnNode(node) {
+                isFocusMode = true;
+                hideTooltip();
+                if (!camera.userData.origPos) {
+                    camera.userData.origPos = camera.position.clone();
+                    camera.userData.origTarget = controls.target.clone();
+                }
+                interactableNodes.forEach(n => {
+                    const op = n === node ? 1 : 0.15;
+                    if (n.material instanceof Array) {
+                        n.material.forEach(m => new TWEEN.Tween(m).to({ opacity: op }, 800).start());
+                    } else {
+                        new TWEEN.Tween(n.material).to({ opacity: op }, 800).start();
+                    }
+                });
+                pulseLines.forEach(l => new TWEEN.Tween(l.material).to({ opacity: 0.1, emissiveIntensity: 0 }, 800).start());
+                new TWEEN.Tween(camera.position).to(new THREE.Vector3(node.position.x, node.position.y, node.position.z + 15), 1000).easing(TWEEN.Easing.Cubic.InOut).start();
+                new TWEEN.Tween(controls.target).to({ x: node.position.x, y: node.position.y, z: node.position.z }, 1000).easing(TWEEN.Easing.Cubic.InOut).onUpdate(() => controls.update()).start();
+            }
+
+            // 添加退出聚焦模式（点击空白区域）
+            container.addEventListener('click', (e) => {
+                if (!isFocusMode) return;
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(interactableNodes);
+                if (intersects.length === 0) {
+                    isFocusMode = false;
+                    interactableNodes.forEach(n => {
+                        if (n.material instanceof Array) {
+                            n.material.forEach(m => new TWEEN.Tween(m).to({ opacity: 1 }, 800).start());
+                        } else {
+                            new TWEEN.Tween(n.material).to({ opacity: 1 }, 800).start();
+                        }
+                    });
+                    pulseLines.forEach(l => new TWEEN.Tween(l.material).to({ opacity: 1 }, 800).start());
+                    if (camera.userData.origPos) {
+                        new TWEEN.Tween(camera.position).to(camera.userData.origPos, 1000).easing(TWEEN.Easing.Cubic.InOut).start();
+                        new TWEEN.Tween(controls.target).to(camera.userData.origTarget, 1000).easing(TWEEN.Easing.Cubic.InOut).onUpdate(() => controls.update()).start();
+                    }
+                }
+            });
+
+            // 节点点击事件（支持双击跳转/聚焦）
+            container.addEventListener('pointerdown', (e) => {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(interactableNodes);
+                const now = Date.now();
+                if (now - lastTapTime < 350) {
+                    clearTimeout(tapTimeout);
+                    if (intersects.length > 0) {
+                        const node = intersects[0].object;
+                        const nodeId = node.userData.id;
+
+                        // --- 定义跳转映射表（节点ID -> 页面文件名）---
+                        const pageMap = {
+                            'elec_cell': '电解池模型.html',
+                            'galv_cell': '原电池模型.html',
+                            'et3': '放电顺序.html',
+                            'plate': '电镀铜.html',
+                            'refine': '电解精炼.html',
+                            'metal': '电解氧化铝.html',
+                            'chlor': '氯碱工业.html',
+                            'lead': '铅蓄电池.html',
+                            'li': '锂离子电池.html',
+                            'zn': '锌锰干电池.html',
+                            'fuel': '氢氧燃料电池.html'
+                        };
+
+                        if (pageMap[nodeId]) {
+                            // 跳转到对应的子页面
+                            hideTooltip();
+                            gotoPage(pageMap[nodeId]);
+                        } else {
+                            // 其他节点执行聚焦动画
+                            focusOnNode(node);
+                        }
+                    }
+                } else {
+                    if (intersects.length > 0) {
+                        const node = intersects[0].object;
+                        tapTimeout = setTimeout(() => showTooltip(node, e.clientX, e.clientY), 350);
+                    } else {
+                        hideTooltip();
+                    }
+                }
+                lastTapTime = now;
+            });
+
+            App.resizeHome = function () {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            };
+
+            const clock = new THREE.Clock();
+            function animate() {
+                requestAnimationFrame(animate);
+                const time = clock.getElapsedTime();
+
+                pulseLines.forEach(item => {
+                    if (!isFocusMode) {
+                        item.material.emissiveIntensity = Math.pow(Math.max(0, Math.sin(time * 4.0 - item.userData.dist * 0.8)), 2) * 1.8;
+                    }
+                });
+                interactableNodes.forEach(mesh => {
+                    const d = mesh.userData;
+                    const scale = d.isHovered ? 1.15 : 1.0;
+                    mesh.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
+                    mesh.position.z = d.baseZ + Math.sin(time * 2 + d.randomPhase) * 0.15;
+                    if (!d.isText && mesh.material instanceof Array) {
+                        const tc = (d.isHovered && !isFocusMode) ? new THREE.Color(0x224477) : new THREE.Color(0x000000);
+                        mesh.material[0].emissive.lerp(tc, 0.1);
+                        mesh.material[4].emissive.lerp(tc, 0.1);
+                    }
+                });
+                particlesMesh.rotation.z = time * 0.02;
+                particlesMesh.rotation.y = Math.sin(time * 0.05) * 0.1;
+                TWEEN.update();
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        })();
+
+        // 强制横屏提示逻辑
+        function checkOrientation() {
+            const tip = document.getElementById('orientation-tip');
+            if (!tip) return;
+            if (window.innerHeight > window.innerWidth) {
+                tip.style.display = 'flex';
+            } else {
+                tip.style.display = 'none';
+            }
+        }
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        window.addEventListener('load', checkOrientation);
+    </script>
+</body>
+</html>
