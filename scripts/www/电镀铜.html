@@ -101,9 +101,12 @@
         .tooltip::after { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); border-width: 6px 6px 0; border-style: solid; border-color: rgba(30, 41, 59, 0.9) transparent transparent transparent; }
         @keyframes popIn { 0% { transform: translate(-50%, -80%) scale(0.8); opacity: 0; } 100% { transform: translate(-50%, -100%) scale(1); opacity: 1; } }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    
+    <!-- 🌟 智能双保险：尝试加载本地文件，如果失败则自动切换为在线 CDN -->
+    <script src="./js/three.min.js" onerror="this.onerror=null; this.src='https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js'"></script>
+    <script src="./js/OrbitControls.js" onerror="this.onerror=null; this.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'"></script>
+    <script src="./js/tween.umd.js" onerror="this.onerror=null; this.src='https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.umd.js'"></script>
+
 </head>
 <body>
     <div id="flash-overlay"></div>
@@ -156,8 +159,13 @@
     <div id="canvas-container"></div>
 
     <script>
-        window.onload = function() {
-            if (typeof THREE === 'undefined') return;
+        // 👉 极少数网络慢时的保险等待机制
+        function initApp() {
+            // 如果文件还没加载好，乖乖等50毫秒再试一次，防止立刻崩溃
+            if (typeof THREE === 'undefined' || typeof TWEEN === 'undefined') {
+                setTimeout(initApp, 50);
+                return;
+            }
 
             const container = document.getElementById('canvas-container');
             const scene = new THREE.Scene();
@@ -825,6 +833,9 @@
             function animate() { requestAnimationFrame(animate); if (window.TWEEN) TWEEN.update(); if (updateElectroplating) updateElectroplating(); controls.update(); renderer.render(scene, camera); }
             animate();
         };
+        
+        // 绑定在浏览器最外层的启动函数
+        window.onload = initApp;
     </script>
 </body>
 </html>
