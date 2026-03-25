@@ -132,9 +132,33 @@
         }
         
         #credit { display: none; }
+
+        /* 启动加载屏 */
+        #loadingScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #2b303b; z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 0.8s ease;
+        }
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid rgba(136, 192, 208, 0.2);
+            border-top: 3px solid #88c0d0;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 12px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { color: #88c0d0; font-size: 0.85rem; font-weight: 500; letter-spacing: 1px; }
     </style>
 </head>
 <body>
+    <!-- 启动加载屏 -->
+    <div id="loadingScreen">
+        <div class="spinner"></div>
+        <div class="loading-text">正在启动微观引擎...</div>
+    </div>
+
     <div id="disasterWarning"></div>
     <div id="tourSubtitle"></div>
     
@@ -473,16 +497,16 @@
         scene.add(macroGroup);
 
         function createMacroScene() {
-            // 放大底座以匹配更大的外壳
+            // 放大底座以匹配更巨大的外壳
             const pedestal = new THREE.Mesh(
-                new THREE.CylinderGeometry(38, 40, 1, 64),
+                new THREE.CylinderGeometry(46, 48, 1, 64),
                 new THREE.MeshStandardMaterial({color: 0x1a1e24, roughness: 0.8})
             );
             pedestal.position.y = -15; // 降到底部避免穿模
             macroGroup.add(pedestal);
 
             const ring = new THREE.Mesh(
-                new THREE.TorusGeometry(36, 0.2, 16, 100),
+                new THREE.TorusGeometry(44, 0.2, 16, 100),
                 new THREE.MeshBasicMaterial({color: 0x81a1c1})
             );
             ring.position.y = -14.5;
@@ -497,16 +521,16 @@
                 transparent: true, opacity: 0.45, 
                 depthWrite: false, side: THREE.DoubleSide 
             });
-            // 包装盒扩大到 56 x 26 x 30，确保即便是寿命末期膨胀的SEI膜也不会穿透外壳
-            const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(56, 26, 30), bodyMat);
+            // 进一步扩大包装盒到 64 x 26 x 54，彻底包裹深长的钴酸锂晶格与SEI膜
+            const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(64, 26, 54), bodyMat);
             batteryGroup.add(bodyMesh);
             
             // 装饰性磨砂腰线
             const wrapMat = new THREE.MeshStandardMaterial({color: 0x3b4252, roughness: 0.9, transparent: true, opacity: 0.85});
-            const wrapMesh = new THREE.Mesh(new THREE.BoxGeometry(56.2, 10, 30.2), wrapMat);
+            const wrapMesh = new THREE.Mesh(new THREE.BoxGeometry(64.2, 10, 54.2), wrapMat);
             batteryGroup.add(wrapMesh);
             
-            // 电极端子：放置在Y=13的高耸外壳顶部
+            // 电极端子：放置在Y=14的高耸外壳顶部
             const anodeMat = new THREE.MeshStandardMaterial({color: 0xb87333, metalness: 0.9, roughness: 0.2});
             const anodeTerm = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 2, 32), anodeMat);
             anodeTerm.position.set(-18, 14, 0); // X精准对齐负极晶格中心
@@ -517,15 +541,15 @@
             cathodeTerm.position.set(18, 14, 0); // X精准对齐正极晶格中心
             batteryGroup.add(cathodeTerm);
 
-            // SOC 进度条，移到扩大后的前面板 (Z=15)
-            const socBg = new THREE.Mesh(new THREE.PlaneGeometry(34, 1.5), new THREE.MeshBasicMaterial({color: 0x111111}));
-            socBg.position.set(0, -6, 15.01);
+            // SOC 进度条，移到扩大后的前面板 (Z=27)，并按比例加宽
+            const socBg = new THREE.Mesh(new THREE.PlaneGeometry(44, 1.5), new THREE.MeshBasicMaterial({color: 0x111111}));
+            socBg.position.set(0, -6, 27.01);
             batteryGroup.add(socBg);
 
-            const socGeo = new THREE.PlaneGeometry(33.6, 1.0);
-            socGeo.translate(33.6/2, 0, 0); 
+            const socGeo = new THREE.PlaneGeometry(43.6, 1.0);
+            socGeo.translate(43.6/2, 0, 0); 
             const socRing = new THREE.Mesh(socGeo, new THREE.MeshBasicMaterial({color: 0xa3be8c}));
-            socRing.position.set(-16.8, -6, 15.02); 
+            socRing.position.set(-21.8, -6, 27.02); 
             batteryGroup.add(socRing);
 
             macroGroup.add(batteryGroup);
@@ -648,7 +672,9 @@
                 microCircuit.visible = false;
                 if(isFPV) ui.btnFPV.click(); 
                 ui.btnFPV.style.display = 'none'; ui.sliderGroup.style.display = 'none'; ui.reactions.style.display = 'none';
-                new TWEEN.Tween(camera.position).to({x:0, y:20, z:75}, 800).easing(TWEEN.Easing.Cubic.Out).start();
+                
+                // 拉远到 Z=90 和抬高到 Y=24 以容纳更巨大的电池外壳
+                new TWEEN.Tween(camera.position).to({x:0, y:24, z:90}, 800).easing(TWEEN.Easing.Cubic.Out).start();
                 new TWEEN.Tween(controls.target).to({x:0, y:0, z:0}, 800).easing(TWEEN.Easing.Cubic.Out).start();
             } else {
                 ui.btnToggle.innerHTML = "👁️ 宏观";
@@ -789,11 +815,11 @@
                 
                 toggleMacroMicro();
                 setSub("【切换宏观】微观世界里亿万次的搬运，化作了宏观设备中源源不断的电能！");
-                await moveCam(10, 20, 75, 0, 0, 0, 3000);
+                await moveCam(10, 24, 90, 0, 0, 0, 3000);
                 await pausableDelay(4500);
                 
                 setSub("【导览结束】您可以自由操作，探索电池的奥秘了");
-                await moveCam(0, 20, 75, 0, 0, 0, 2500);
+                await moveCam(0, 24, 90, 0, 0, 0, 2500);
                 await pausableDelay(2000);
             } catch(e) {
                 if (e.message !== 'Tour stopped') {
@@ -1030,7 +1056,8 @@
                 if(state === 'overcharge') target_t = 1.0; 
                 
                 // 导览被暂停时，冻结离子的长距离迁移
-                let currentSpeed = ion.speed * (isFPV ? 0.3 : 1.0);
+                // 【速度优化】将第一人称视角(FPV)下的速度从 0.3 降低到 0.15 (减慢一半)
+                let currentSpeed = ion.speed * (isFPV ? 0.15 : 1.0);
                 if (isTourPaused) currentSpeed = 0; 
 
                 if (ion.t !== target_t && (state !== 'idle' || (ion.t > 0 && ion.t < 1))) {
@@ -1091,7 +1118,21 @@
                     fpvPauseTimer++;
                     if(fpvPauseTimer > 90) { let next = ions.find(i => !i.isDead && i.t > 0.1 && i.t < 0.9); if(next) { fpvTargetIon = next; fpvPauseTimer = 0; } }
                 } else { fpvPauseTimer = 0; }
-                const pos = fpvTargetIon.mesh.position;
+                
+                // 【平稳运镜修复】：不再使用带有布朗运动随机抖动的离子 mesh.position
+                // 而是实时计算出它在贝塞尔曲线上的绝对平滑坐标，让摄像机像走在钢丝导轨上一样平稳
+                let smoothPos = new THREE.Vector3();
+                if(fpvTargetIon.t > 0 && fpvTargetIon.t < 1) {
+                    let u = fpvTargetIon.t, easeU = u * u * (3 - 2 * u), omt = 1 - easeU;
+                    smoothPos.set(
+                        omt*omt*fpvTargetIon.slotC.x + 2*omt*easeU*fpvTargetIon.mid.x + easeU*easeU*fpvTargetIon.slotA.x,
+                        omt*omt*fpvTargetIon.slotC.y + 2*omt*easeU*fpvTargetIon.mid.y + easeU*easeU*fpvTargetIon.slotA.y,
+                        omt*omt*fpvTargetIon.slotC.z + 2*omt*easeU*fpvTargetIon.mid.z + easeU*easeU*fpvTargetIon.slotA.z
+                    );
+                } else {
+                    smoothPos.copy(fpvTargetIon.t === 0 ? fpvTargetIon.slotC : fpvTargetIon.slotA);
+                }
+
                 let lookDir = new THREE.Vector3();
                 if(fpvTargetIon.t > 0 && fpvTargetIon.t < 1) {
                     let t2 = fpvTargetIon.t + (state==='charge'? 0.05 : -0.05); if(t2>1)t2=1; if(t2<0)t2=0;
@@ -1100,9 +1141,10 @@
                     let ny = oU*oU*fpvTargetIon.slotC.y + 2*oU*eU*fpvTargetIon.mid.y + eU*eU*fpvTargetIon.slotA.y;
                     let nz = oU*oU*fpvTargetIon.slotC.z + 2*oU*eU*fpvTargetIon.mid.z + eU*eU*fpvTargetIon.slotA.z;
                     lookDir.set(nx, ny, nz);
-                } else { lookDir.set(pos.x, pos.y, pos.z-5); }
-                const forward = lookDir.clone().sub(pos).normalize();
-                camera.position.lerp(pos.clone().add(forward.multiplyScalar(-2.5)), 0.12); 
+                } else { lookDir.set(smoothPos.x, smoothPos.y, smoothPos.z-5); }
+                
+                const forward = lookDir.clone().sub(smoothPos).normalize();
+                camera.position.lerp(smoothPos.clone().add(forward.multiplyScalar(-2.5)), 0.12); 
                 camera.lookAt(lookDir);
             } else if (!isFPV && state !== 'exploding' && state !== 'overcharge' && !isTouring) {
                 scene.position.set(0,0,0); controls.update();
@@ -1112,6 +1154,15 @@
         }
         
         setCircuitState(false);
+        
+        // 预编译着色器并强制渲染第一帧，避免启动卡顿
+        composer.render();
+        
+        // 移除加载屏
+        const loadingScreen = document.getElementById('loadingScreen');
+        loadingScreen.style.opacity = '0';
+        setTimeout(() => loadingScreen.remove(), 800);
+
         animate();
 
         window.addEventListener('resize', () => {
