@@ -17,23 +17,6 @@
         }
         .app-wrapper { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
         canvas { display: block; outline: none; }
-        
-        /* 👉 新增：加载屏样式 */
-        #loading-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #334155; z-index: 999999;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.15);
-            border-top-color: #3b82f6; border-radius: 50%;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
-        .loading-text { color: #94a3b8; font-size: 15px; letter-spacing: 3px; font-weight: 500; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
         #home-ui-layer {
             position: absolute; top: 30px; left: 0; width: 100%;
             text-align: center; pointer-events: none; z-index: 10;
@@ -50,6 +33,7 @@
             position: absolute; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.8); padding: 20px; border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); color: #1e293b; font-size: 14px;
+            /* 👉 修复核心 1：默认关闭点击拦截，避免隐形面板挡住节点 */
             pointer-events: none; opacity: 0; 
             transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             transform: translate(-50%, -100%); z-index: 20; max-width: 320px; max-height: 70vh;
@@ -61,27 +45,20 @@
         .tooltip-action-btn { display: block; width: 100%; margin-top: 18px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 800; cursor: pointer; }
         #orientation-tip { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(51, 65, 85, 0.95); color: #ffffff; display: flex; justify-content: center; align-items: center; flex-direction: column; z-index: 10000; font-size: 20px; text-align: center; backdrop-filter: blur(12px); }
     </style>
-
-    <!-- 👉 核心优化 1：移回 head 并加上 defer 属性。
-         这会让浏览器在遇到 HTML 头部时立刻“多线程并行下载”这些大文件，极大缩短整体白屏时间！ -->
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/@tweenjs/tween.js@18.6.4/dist/tween.umd.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-    <script src="https://fastly.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    
+    <!-- 改回在线 CDN 引入，以解决在线预览环境下找不到本地文件的问题 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 </head>
 <body>
-    <!-- 👉 新增：页面一打开就立即显示的加载动画 -->
-    <div id="loading-screen">
-        <div class="spinner"></div>
-        <div class="loading-text">正在初始化虚拟空间...</div>
-    </div>
-
     <div id="home-wrapper" class="app-wrapper">
         <div id="home-ui-layer">
             <div class="home-title">化学反应与电能</div>
@@ -92,9 +69,6 @@
     <div id="orientation-tip" style="display: none;"><div class="tip-icon">📱 ⟳</div><div>请将设备旋转为横屏模式</div></div>
 
     <script>
-        // 👉 配合优化 1：等待外部的 defer 脚本全部并行加载完毕后再执行我们的逻辑
-        window.addEventListener('DOMContentLoaded', () => {
-
         const AudioEngine = (function() {
             let ctx = null, unlocked = false;
             function init() {
@@ -143,31 +117,27 @@
                 powerPreference: "high-performance" 
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            // 👉 恢复：无论手机还是电脑，都保持最高 2.0 的高清像素比
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0)); 
             container.appendChild(renderer.domElement);
 
             const renderScene = new THREE.RenderPass(scene, camera);
-            
-            // 👉 恢复：光晕特效也使用全屏最高分辨率
             const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.4, 0.92);
-            
             const composer = new THREE.EffectComposer(renderer);
-            // 👉 恢复：后期处理通道保持高清
             composer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0)); 
             composer.addPass(renderScene);
             composer.addPass(bloomPass);
 
+            // 👉 修复核心 2：完美匹配 2D 平面地图的视角控制器
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true; 
             controls.dampingFactor = 0.1;
-            controls.enableRotate = false; 
-            controls.enablePan = true;     
-            controls.screenSpacePanning = true; 
-            controls.enableZoom = true;    
+            controls.enableRotate = false; // 严禁 3D 旋转
+            controls.enablePan = true;     // 允许平移
+            controls.screenSpacePanning = true; // 关键配置：让平移跟随鼠标/手指，不随深度改变方向
+            controls.enableZoom = true;    // 允许滚轮/双指缩放
             controls.zoomSpeed = 1.2;
-            controls.minDistance = 15;     
-            controls.maxDistance = 120;    
+            controls.minDistance = 15;     // 最大放大比例
+            controls.maxDistance = 120;    // 最小缩小比例
 
             controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
             controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
@@ -369,6 +339,7 @@
                 tooltipEl.style.left = `${Math.min(window.innerWidth-160, Math.max(160, x))}px`;
                 tooltipEl.style.top = `${y > 150 ? y - 40 : y + 80}px`; 
                 tooltipEl.style.opacity = 1;
+                // 👉 修复核心 1.1：只有当面板出现时，才允许它内部被点击，否则完全“穿透”面板
                 tooltipEl.style.pointerEvents = 'auto'; 
             }
 
@@ -401,14 +372,16 @@
             }
 
             function resetAll() {
-                if (!isFocusMode) return; 
+                if (!isFocusMode) return; // 只有处于聚焦状态才需要重置视图，防止误杀平移！
                 isFocusMode = false; currentFocusedId = null;
                 tooltipEl.style.opacity = 0;
+                // 👉 修复核心 1.2：面板消失时，彻底关闭其鼠标响应，让事件能穿透到底部的模型
                 tooltipEl.style.pointerEvents = 'none';
                 
                 if(camTween) camTween.stop();
                 if(targetTween) targetTween.stop();
 
+                // 恢复 Z 轴，但不强行将 X 和 Y 拉回 0，保留用户的平移记录！
                 const currentTarget = controls.target;
                 camTween = new TWEEN.Tween(camera.position).to({ x: currentTarget.x, y: currentTarget.y, z: 65 }, 800).easing(TWEEN.Easing.Cubic.InOut).start();
                 targetTween = new TWEEN.Tween(controls.target).to({ x: currentTarget.x, y: currentTarget.y, z: 0 }, 800).easing(TWEEN.Easing.Cubic.InOut).onUpdate(() => controls.update()).start();
@@ -462,10 +435,10 @@
                         focusOnNode(clickedNode); 
                         setTimeout(() => showTooltip(clickedNode, window.innerWidth / 2, window.innerHeight / 2 + 100), 100); 
                     } else {
-                        resetAll(); 
+                        resetAll(); // 如果点击的是当前聚焦的方块，则退出聚焦
                     }
                 } else {
-                    if (isFocusMode) resetAll(); 
+                    if (isFocusMode) resetAll(); // 👉 修复核心 3：如果你没在聚焦模式，点击背景就不会强制把镜头拉回中间，保留了你平移的自由！
                 }
 
                 if (e.pointerType !== 'mouse' && hoveredNode) { hoveredNode.userData.isHovered = false; hoveredNode = null; }
@@ -492,15 +465,7 @@
                 targetTween = new TWEEN.Tween(controls.target).to({ x: node.position.x, y: node.position.y, z: 0 }, 1000).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => controls.update()).start();
             }
 
-            App.resizeHome = () => { 
-                camera.aspect = window.innerWidth/window.innerHeight; 
-                camera.updateProjectionMatrix(); 
-                renderer.setSize(window.innerWidth, window.innerHeight); 
-                composer.setSize(window.innerWidth, window.innerHeight); 
-                
-                // 👉 窗口改变时，同步保持全分辨率光晕
-                bloomPass.resolution.set(window.innerWidth, window.innerHeight);
-            };
+            App.resizeHome = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); };
 
             const clock = new THREE.Clock();
             function animate() {
@@ -523,23 +488,8 @@
                 TWEEN.update(); controls.update(); composer.render(); 
             }
             animate();
-
-            // 👉 优化：确保一切就绪并渲染出第一帧后，平滑隐藏加载动画
-            requestAnimationFrame(() => {
-                const isMobileScreen = window.innerWidth < 768; // 仅用于控制预热时间
-                setTimeout(() => {
-                    const loader = document.getElementById('loading-screen');
-                    if (loader) {
-                        loader.style.opacity = '0';
-                        setTimeout(() => loader.remove(), 600); // 等待淡出动画结束再移除 DOM
-                    }
-                }, isMobileScreen ? 800 : 400); // 如果是手机，多给 0.4 秒让复杂的着色器完成预热
-            });
-
         })();
         window.addEventListener('load', checkOrientation);
-        
-        }); // 结束 DOMContentLoaded 监听
     </script>
 </body>
 </html>
