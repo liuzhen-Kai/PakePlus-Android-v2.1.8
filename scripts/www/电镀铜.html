@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>3D 电镀铜微观宇宙 - 极致沉浸版</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+            user-select: none;
+        }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        #top-left-ui { position: absolute; top: 15px; left: 20px; pointer-events: none; z-index: 10; }
+        .title { font-size: 22px; font-weight: bold; color: #f8fafc; text-shadow: 0px 2px 4px rgba(0,0,0,0.8); letter-spacing: 2px; }
+
+        .hud-panel {
+            position: absolute; top: 15px; right: 20px; background: rgba(15, 23, 42, 0.75);
+            color: #38bdf8; padding: 10px 15px; border-radius: 8px; font-family: monospace;
+            font-size: 12px; z-index: 50; display: flex; flex-direction: column; gap: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none; backdrop-filter: blur(4px); transition: right 0.3s ease;
+        }
+        .hud-row { display: flex; justify-content: space-between; gap: 15px; }
+        .chart-container { margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 5px; }
+        .chart-legend { display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px; color: #cbd5e1; }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-color { width: 10px; height: 10px; border-radius: 2px; }
+
+        /* === 极限实验室抽屉 === */
+        .drawer-panel {
+            position: absolute; right: -240px; top: 150px; width: 240px; 
+            background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.2);
+            border-right: none; border-radius: 12px 0 0 12px;
+            padding: 15px; color: white; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 150;
+            backdrop-filter: blur(8px); pointer-events: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.5);
+        }
+        .drawer-panel.open { right: 0; }
+        .drawer-handle {
+            position: absolute; left: -34px; top: 50%; transform: translateY(-50%);
+            width: 34px; height: 54px; background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255,255,255,0.2); border-right: none;
+            border-radius: 8px 0 0 8px; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; cursor: pointer; color: #38bdf8; box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+        }
+        .drawer-slider-row { margin-top: 15px; font-size: 13px; color: #cbd5e1; font-weight: bold; }
+        .drawer-slider-row input { width: 100%; margin-top: 8px; accent-color: #38bdf8; }
+        .drawer-hint { margin-top: 20px; font-size: 11px; color: #94a3b8; line-height: 1.5; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; }
+
+        /* === 子弹时间暗角与闪光特效 === */
+        .vignette {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
+            pointer-events: none; opacity: 0; transition: opacity 0.5s ease; z-index: 5;
+        }
+        .vignette.active { opacity: 1; }
+        
+        #flash-overlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #fff; pointer-events: none; opacity: 0; z-index: 200;
+        }
+
+        .mobile-controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 15px; z-index: 100; width: 90%; max-width: 800px; justify-content: center; pointer-events: auto;
+        }
+        .plate-btn {
+            flex: 1; color: white; border: none; padding: 12px 0; border-radius: 8px; font-size: 15px; font-weight: bold; letter-spacing: 1px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4); transition: transform 0.1s, background 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
+        }
+        .plate-btn:active { transform: scale(0.92); } 
+        .btn-power-on { background: #eab308; color: #000; } 
+        .btn-power-off { background: #ef4444; color: #fff; } 
+        .btn-view { background: #10b981; }
+        .btn-tour { background: #8b5cf6; }
+        .btn-reset { background: #64748b; }
+
+        .plate-floating-label { position: absolute; color: #1e293b; font-size: 11px; font-weight: bold; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.9); transform: translate(-50%, -50%); white-space: nowrap; z-index: 20; display: none; background: rgba(255, 255, 255, 0.85); padding: 3px 8px; border-radius: 4px; }
+        
+        .eq-floating-label {
+            position: absolute; font-size: 12px; font-weight: bold; color: #475569; background: rgba(248, 250, 252, 0.95);
+            padding: 4px 8px; border-radius: 4px; pointer-events: none; transform: translate(-50%, -50%); z-index: 20; display: none; white-space: nowrap;
+            transition: all 0.2s ease-out; 
+        }
+        .eq-floating-label.anode { border-left: 3px solid #f59e0b; }
+        .eq-floating-label.cathode { border-left: 3px solid #10b981; }
+        .eq-active-anode { box-shadow: 0 0 15px #f59e0b, inset 0 0 8px #fef3c7 !important; color: #b45309 !important; border-left: 5px solid #f59e0b !important; transform: translate(-50%, -50%) scale(1.1) !important; z-index: 30; }
+        .eq-active-cathode { box-shadow: 0 0 15px #10b981, inset 0 0 8px #ecfdf5 !important; color: #047857 !important; border-left: 5px solid #10b981 !important; transform: translate(-50%, -50%) scale(1.1) !important; z-index: 30; }
+
+        .plate-power-source { position: absolute; background: #ef4444; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; transform: translate(-50%, -50%); pointer-events: none; border: 1px solid white; z-index: 20; display: none; }
+        .tour-subtitle { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); color: #fff; padding: 12px 20px; border-radius: 12px; font-size: 15px; z-index: 100; text-align: center; max-width: 80%; line-height: 1.4; display: none; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px); }
+
+        .tooltip {
+            position: absolute; background: rgba(30, 41, 59, 0.9); color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: bold; pointer-events: none; transform: translate(-50%, -100%); margin-top: -15px; white-space: nowrap; display: none; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px); animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .tooltip::after { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); border-width: 6px 6px 0; border-style: solid; border-color: rgba(30, 41, 59, 0.9) transparent transparent transparent; }
+        @keyframes popIn { 0% { transform: translate(-50%, -80%) scale(0.8); opacity: 0; } 100% { transform: translate(-50%, -100%) scale(1); opacity: 1; } }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+    <div id="flash-overlay"></div>
+    <div id="vignette" class="vignette"></div>
+
+    <div id="top-left-ui"><div class="title">电镀铜微观宇宙</div></div>
+
+    <div class="hud-panel" id="main-hud">
+        <div style="text-align:center; color:#fff; margin-bottom:4px; font-weight:bold;">实况数据</div>
+        <div class="hud-row"><span>⏱️ 时间:</span> <span id="hud-time">00:00</span></div>
+        <div class="hud-row"><span style="color:#f87171;">📉 阳极质量:</span> <span id="hud-anode-mass">-0.00g</span></div>
+        <div class="hud-row"><span style="color:#4ade80;">📈 阴极质量:</span> <span id="hud-cathode-mass">+0.00g</span></div>
+        <div class="chart-container">
+            <div style="font-size:10px; color:#94a3b8; text-align:center;">离子浓度</div>
+            <canvas id="trendChart" width="140" height="50"></canvas>
+            <div class="chart-legend">
+                <div class="legend-item"><div class="legend-color" style="background:#0ea5e9;"></div>Cu²⁺</div>
+                <div class="legend-item"><div class="legend-color" style="background:#fbbf24;"></div>SO₄²⁻</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 极限实验室抽屉 -->
+    <div id="drawer-panel" class="drawer-panel">
+        <div id="drawer-handle" class="drawer-handle">◀</div>
+        <div style="font-weight:bold; font-size:15px; color:#f8fafc; border-bottom:1px solid #334155; padding-bottom:8px;">⚙️ 极限实验室</div>
+        <div class="drawer-slider-row">
+            <div style="display:flex; justify-content:space-between;"><span>⚡ 电压倍率</span> <span id="val-voltage" style="color:#eab308">1.0x</span></div>
+            <input type="range" id="slider-voltage" min="0.1" max="5.0" step="0.1" value="1.0">
+        </div>
+        <div class="drawer-slider-row">
+            <div style="display:flex; justify-content:space-between;"><span>💧 溶液浓度</span> <span id="val-conc" style="color:#0ea5e9">1.0x</span></div>
+            <input type="range" id="slider-conc" min="0.2" max="3.0" step="0.2" value="1.0">
+        </div>
+        <div class="drawer-hint">
+            <strong>📸 第一人称彩蛋：</strong><br>微观且通电状态下，<strong>双击屏幕任意位置</strong>，你将化身为一颗铜离子。在临近阴极时，请迎接两颗迎面而来的电子！
+        </div>
+    </div>
+
+    <div id="tour-subtitle" class="tour-subtitle"></div>
+    <div id="tooltip" class="tooltip"></div>
+
+    <div class="mobile-controls">
+        <button id="plate-btn-toggle" class="plate-btn btn-power-on">⚡ 通电</button>
+        <button id="plate-btn-view" class="plate-btn btn-view">🔍 宏观装置</button>
+        <button id="btn-tour" class="plate-btn btn-tour">🎬 播放导览</button>
+        <button id="plate-btn-reset" class="plate-btn btn-reset">🔄 重置</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        window.onload = function() {
+            if (typeof THREE === 'undefined') return;
+
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, -1, 20); 
+            
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enablePan = false; 
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(5, 10, 20);
+            scene.add(dirLight);
+
+            const bgGeo = new THREE.PlaneGeometry(100, 100);
+            const bgMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.1 });
+            const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+            bgMesh.position.z = -5;
+            scene.add(bgMesh);
+
+            function createWaterMolecule() {
+                const group = new THREE.Group();
+                const oMat = new THREE.MeshPhongMaterial({ color: 0xef4444 }); 
+                const hMat = new THREE.MeshPhongMaterial({ color: 0xffffff }); 
+                const oMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 16), oMat);
+                const h1 = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), hMat);
+                h1.position.set(0.22, 0.18, 0); 
+                const h2 = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), hMat);
+                h2.position.set(-0.22, 0.18, 0);
+                group.add(oMesh, h1, h2);
+                group.userData = { type: 'H2O', label: '水分子 (H₂O)' };
+                group.children.forEach(c => c.userData = group.userData); 
+                return group;
+            }
+
+            function createSulfateMolecule() {
+                const group = new THREE.Group();
+                const sMat = new THREE.MeshPhongMaterial({ color: 0xeab308 }); 
+                const oMat = new THREE.MeshPhongMaterial({ color: 0xef4444 }); 
+                const sMesh = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), sMat);
+                group.add(sMesh);
+                const dist = 0.28; 
+                const positions = [[dist,dist,dist], [-dist,-dist,dist], [dist,-dist,-dist], [-dist,dist,-dist]];
+                positions.forEach(p => {
+                    const o = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), oMat);
+                    o.position.set(p[0], p[1], p[2]);
+                    group.add(o);
+                });
+                group.userData = { type: 'SO4', label: '硫酸根离子 (SO₄²⁻)' };
+                group.children.forEach(c => c.userData = group.userData);
+                return group;
+            }
+
+            let wrapperGroup = new THREE.Group();
+            scene.add(wrapperGroup);
+
+            // 全局控制变量
+            let voltageScale = 1.0;
+            let concScale = 1.0;
+            let isBulletTime = false;
+            let trackedIon = null;
+            let originalCamPos = null;
+            let hasTriggeredElectrons = false;
+            let fpsElectrons = [];
+
+            // 抽屉 UI 事件
+            document.getElementById('drawer-handle').addEventListener('click', () => {
+                const drawer = document.getElementById('drawer-panel');
+                const hud = document.getElementById('main-hud');
+                drawer.classList.toggle('open');
+                document.getElementById('drawer-handle').innerText = drawer.classList.contains('open') ? '▶' : '◀';
+                hud.style.opacity = drawer.classList.contains('open') ? '0' : '1';
+                hud.style.pointerEvents = drawer.classList.contains('open') ? 'none' : 'auto';
+            });
+
+            document.getElementById('slider-voltage').addEventListener('input', (e) => {
+                voltageScale = parseFloat(e.target.value);
+                document.getElementById('val-voltage').innerText = voltageScale.toFixed(1) + 'x';
+            });
+
+            let updateElectroplating = null;
+            function addElectroplatingModel(scale) {
+                wrapperGroup.scale.set(scale, scale, scale);
+
+                let atomsGroup = new THREE.Group();
+                let moleculesGroup = new THREE.Group(); 
+                wrapperGroup.add(atomsGroup, moleculesGroup);
+
+                let isPlaying = false;
+                const GRID_SIZE = 12; 
+                const SPACING = 1.3;
+                const CATHODE_X = -12;
+                const ANODE_X = 12;
+
+                let anodeMeshes = [], cathodeTargets = [], anodeSources = [], electronParticles = [];
+                let freeCuIons = []; 
+                let depositingIons = [];
+                let isMacroView = false;
+                let microMeshes = [];
+                let macroAnode, macroCathodeBase, macroCathodePlatingL, macroCathodePlatingR;
+                let liquidBox;
+
+                let simulatedTime = 0, totalAtomsMoved = 0, totalAtomsDeposited = 0;
+                let chartHistory = [];
+                let lastChartUpdateTime = 0;
+
+                const cuMaterial = new THREE.MeshStandardMaterial({ color: 0xdca323, roughness: 1.0, metalness: 0.1 });
+                const ionMaterial = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.2, emissive: 0x0284c7, emissiveIntensity: 0.4 }); 
+                const subMaterial = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.6 });
+
+                function buildScene() {
+                    atomsGroup.clear(); moleculesGroup.clear();
+                    freeCuIons = []; depositingIons = []; 
+                    cathodeTargets = []; anodeSources = []; microMeshes = []; electronParticles = [];
+                    anodeMeshes = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0).map(() => []));
+
+                    const sphereGeo = new THREE.SphereGeometry(0.55, 16, 16);
+
+                    for (let i = 0; i < GRID_SIZE; i++) {
+                        for (let j = 0; j < GRID_SIZE; j++) {
+                            const mesh = new THREE.Mesh(sphereGeo, subMaterial);
+                            mesh.position.set(CATHODE_X, (i - GRID_SIZE/2 + 0.5) * SPACING, (j - GRID_SIZE/2 + 0.5) * SPACING);
+                            mesh.userData = { label: '阴极：铁原子 (Fe)' }; 
+                            atomsGroup.add(mesh); microMeshes.push(mesh);
+                        }
+                    }
+
+                    for (let layer = 0; layer < 4; layer++) {
+                        for (let i = 0; i < GRID_SIZE; i++) {
+                            for (let j = 0; j < GRID_SIZE; j++) {
+                                const mesh = new THREE.Mesh(sphereGeo, cuMaterial);
+                                mesh.position.set(ANODE_X - layer * SPACING, (i - GRID_SIZE/2 + 0.5) * SPACING, (j - GRID_SIZE/2 + 0.5) * SPACING);
+                                mesh.userData = { label: '阳极：纯铜原子 (Cu)' };
+                                atomsGroup.add(mesh); anodeMeshes[i][j][layer] = mesh; microMeshes.push(mesh);
+                            }
+                        }
+                    }
+
+                    for (let layer = 3; layer >= 0; layer--) {
+                        let curSources = [];
+                        for (let i=0; i<GRID_SIZE; i++) for (let j=0; j<GRID_SIZE; j++) curSources.push(anodeMeshes[i][j][layer]);
+                        anodeSources = anodeSources.concat(curSources.sort(() => Math.random() - 0.5));
+                    }
+                    for (let layer = 1; layer <= 2; layer++) {
+                        let curTargets = [];
+                        for (let i=0; i<GRID_SIZE; i++) {
+                            for (let j=0; j<GRID_SIZE; j++) {
+                                let py = (i - GRID_SIZE/2 + 0.5) * SPACING, pz = (j - GRID_SIZE/2 + 0.5) * SPACING;
+                                curTargets.push({x: CATHODE_X + layer * SPACING, y: py, z: pz}, {x: CATHODE_X - layer * SPACING, y: py, z: pz});
+                            }
+                        }
+                        cathodeTargets = cathodeTargets.concat(curTargets.sort(() => Math.random() - 0.5));
+                    }
+
+                    const boxMat = new THREE.MeshPhysicalMaterial({ color: 0x0044dd, transparent: true, opacity: 0.35, depthWrite: false, roughness: 0.1 });
+                    liquidBox = new THREE.Mesh(new THREE.BoxGeometry(32, 22, 22), boxMat);
+                    liquidBox.userData = { label: '硫酸铜溶液 (CuSO₄)' };
+                    atomsGroup.add(liquidBox);
+
+                    document.getElementById('slider-conc').addEventListener('input', (e) => {
+                        concScale = parseFloat(e.target.value);
+                        document.getElementById('val-conc').innerText = concScale.toFixed(1) + 'x';
+                        if (liquidBox) liquidBox.material.opacity = 0.35 * Math.min(concScale, 2.5);
+                    });
+
+                    macroAnode = new THREE.Mesh(new THREE.BoxGeometry(4*SPACING, GRID_SIZE*SPACING, GRID_SIZE*SPACING), cuMaterial.clone());
+                    macroAnode.position.set(ANODE_X - 1.5*SPACING, 0, 0);
+                    macroAnode.userData = { label: '阳极板：纯铜块' };
+
+                    macroCathodeBase = new THREE.Mesh(new THREE.BoxGeometry(SPACING, GRID_SIZE*SPACING, GRID_SIZE*SPACING), subMaterial.clone());
+                    macroCathodeBase.position.set(CATHODE_X, 0, 0);
+                    macroCathodeBase.userData = { label: '阴极板：铁制待镀件' };
+
+                    macroCathodePlatingL = new THREE.Mesh(new THREE.BoxGeometry(2*SPACING, GRID_SIZE*SPACING+0.2, GRID_SIZE*SPACING+0.2), cuMaterial.clone());
+                    macroCathodePlatingR = new THREE.Mesh(new THREE.BoxGeometry(2*SPACING, GRID_SIZE*SPACING+0.2, GRID_SIZE*SPACING+0.2), cuMaterial.clone());
+                    macroCathodePlatingL.userData = { label: '电镀产生的纯铜镀层' };
+                    macroCathodePlatingR.userData = { label: '电镀产生的纯铜镀层' };
+
+                    atomsGroup.add(macroAnode, macroCathodeBase, macroCathodePlatingL, macroCathodePlatingR);
+
+                    microMeshes.forEach(m => m.visible = !isMacroView);
+                    moleculesGroup.visible = !isMacroView;
+                    macroAnode.visible = isMacroView; macroCathodeBase.visible = isMacroView;
+                    macroCathodePlatingL.visible = false; macroCathodePlatingR.visible = false;
+
+                    const wire = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(CATHODE_X, 7, 0), new THREE.Vector3(CATHODE_X, 18, 0),
+                        new THREE.Vector3(ANODE_X, 18, 0), new THREE.Vector3(ANODE_X, 7, 0)
+                    ]), new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 2 }));
+                    atomsGroup.add(wire);
+
+                    const eMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+                    for(let i=0; i<12; i++) {
+                        const eMesh = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), eMat);
+                        eMesh.userData = { label: '电子 (e⁻)' };
+                        eMesh.visible = false; atomsGroup.add(eMesh);
+                        electronParticles.push({ mesh: eMesh, progress: i/12 });
+                    }
+
+                    for(let i=0; i<45; i++) {
+                        const so4 = createSulfateMolecule();
+                        so4.position.set((Math.random()-0.5)*26, (Math.random()-0.5)*20, (Math.random()-0.5)*20);
+                        so4.userData.vx = (Math.random()-0.5)*0.06; so4.userData.vy = (Math.random()-0.5)*0.06; so4.userData.vz = (Math.random()-0.5)*0.06; so4.userData.rot = Math.random()*0.1;
+                        moleculesGroup.add(so4);
+
+                        const h2o = createWaterMolecule();
+                        h2o.position.set((Math.random()-0.5)*26, (Math.random()-0.5)*20, (Math.random()-0.5)*20);
+                        h2o.userData.vx = (Math.random()-0.5)*0.08; h2o.userData.vy = (Math.random()-0.5)*0.08; h2o.userData.vz = (Math.random()-0.5)*0.08; h2o.userData.rot = Math.random()*0.15;
+                        moleculesGroup.add(h2o);
+                    }
+
+                    for(let i=0; i<45; i++) {
+                        const ion = new THREE.Mesh(sphereGeo, ionMaterial);
+                        ion.position.set((Math.random()-0.5)*26, (Math.random()-0.5)*20, (Math.random()-0.5)*20);
+                        ion.userData = { vx: (Math.random()-0.5)*0.06, vy: (Math.random()-0.5)*0.06, vz: (Math.random()-0.5)*0.06, label: '铜离子 (Cu²⁺)' };
+                        ion.visible = !isMacroView;
+                        atomsGroup.add(ion);
+                        freeCuIons.push(ion);
+                    }
+                }
+
+                const labelsData = [
+                    { id: 'cathode', text: '阴极', className: 'plate-floating-label', pos: new THREE.Vector3(CATHODE_X - 6, 0, 0) },
+                    { id: 'anode', text: '阳极', className: 'plate-floating-label', pos: new THREE.Vector3(ANODE_X + 6, 0, 0) },
+                    { id: 'eq-c', text: 'Cu²⁺+2e⁻=Cu', className: 'eq-floating-label cathode', pos: new THREE.Vector3(CATHODE_X - 6, -3, 0) },
+                    { id: 'eq-a', text: 'Cu-2e⁻=Cu²⁺', className: 'eq-floating-label anode', pos: new THREE.Vector3(ANODE_X + 6, -3, 0) },
+                    { id: 'power', text: '直流电源', className: 'plate-power-source', pos: new THREE.Vector3(0, 18, 0) }
+                ];
+
+                const htmlElements = labelsData.map(d => {
+                    const div = document.createElement('div');
+                    div.id = d.id; 
+                    div.className = d.className; div.innerText = d.text;
+                    document.body.appendChild(div);
+                    return { id: d.id, dom: div, pos: d.pos };
+                });
+
+                function drawChart() {
+                    const canvas = document.getElementById('trendChart');
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+                    ctx.clearRect(0, 0, w, h);
+                    ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.beginPath();
+                    for(let i=1; i<3; i++) { ctx.moveTo(0, h*i/3); ctx.lineTo(w, h*i/3); }
+                    ctx.stroke();
+
+                    if (chartHistory.length < 2) return;
+                    const maxTime = 100, maxConc = 2.0;
+
+                    function drawLine(key, color, offset) {
+                        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+                        chartHistory.forEach((pt, idx) => {
+                            let x = w - ((chartHistory.length - 1 - idx) / maxTime) * w;
+                            let y = h - (pt[key] / maxConc) * h + offset;
+                            if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                        });
+                        ctx.stroke();
+                    }
+                    drawLine('cu', '#0ea5e9', -1);
+                    drawLine('so4', '#fbbf24', 1);
+                }
+
+                // ==========================================
+                // 第一人称化身 (FPS View) 逻辑
+                // ==========================================
+                function endBulletTime() {
+                    if (!isBulletTime) return;
+                    if (trackedIon) trackedIon.visible = true; 
+                    isBulletTime = false;
+                    trackedIon = null;
+                    hasTriggeredElectrons = false;
+                    // 清理电子
+                    fpsElectrons.forEach(e => scene.remove(e));
+                    fpsElectrons = [];
+                    
+                    document.getElementById('vignette').classList.remove('active');
+                    document.getElementById('tour-subtitle').style.display = 'none';
+                    if (originalCamPos) {
+                        new TWEEN.Tween(camera.position).to(originalCamPos, 1500).easing(TWEEN.Easing.Cubic.Out).start();
+                        new TWEEN.Tween(controls.target).to({x:0, y:0, z:0}, 1500).easing(TWEEN.Easing.Cubic.Out)
+                            .onComplete(() => { controls.enabled = true; }).start();
+                        new TWEEN.Tween(camera).to({ fov: 45 }, 1500).easing(TWEEN.Easing.Cubic.Out).onUpdate(()=>camera.updateProjectionMatrix()).start();
+                    }
+                }
+
+                function startBulletTime(ion) {
+                    isBulletTime = true;
+                    trackedIon = ion;
+                    hasTriggeredElectrons = false;
+                    originalCamPos = camera.position.clone();
+                    controls.enabled = false; 
+                    
+                    document.getElementById('vignette').classList.add('active');
+                    const subtitle = document.getElementById('tour-subtitle');
+                    subtitle.innerHTML = "🎯 <b>第一人称沉浸模式</b><br>你已化身为铜离子，正冲向阴极，准备夺取电子！";
+                    subtitle.style.display = 'block';
+
+                    new TWEEN.Tween(camera).to({ fov: 80 }, 1000).easing(TWEEN.Easing.Cubic.Out).onUpdate(()=>camera.updateProjectionMatrix()).start();
+                }
+
+                function triggerFPSFlash() {
+                    const flash = document.getElementById('flash-overlay');
+                    flash.style.opacity = '1';
+                    new TWEEN.Tween({o: 1}).to({o: 0}, 800).onUpdate(function(obj) {
+                        flash.style.opacity = obj.o;
+                    }).start();
+                }
+
+                function setPlaying(p) {
+                    isPlaying = p;
+                    const btn = document.getElementById('plate-btn-toggle');
+                    if(btn) {
+                        if (isPlaying) {
+                            btn.innerHTML = "🔴 断电"; btn.className = "plate-btn btn-power-off";
+                        } else {
+                            btn.innerHTML = "⚡ 通电"; btn.className = "plate-btn btn-power-on";
+                            if(isBulletTime) endBulletTime();
+                        }
+                    }
+                }
+
+                function setMacroView(m) {
+                    isMacroView = m;
+                    if(isBulletTime && isMacroView) endBulletTime();
+
+                    const btn = document.getElementById('plate-btn-view');
+                    if(btn) btn.innerHTML = isMacroView ? "🔬 微观视图" : "🔍 宏观装置";
+                    
+                    microMeshes.forEach(mesh => mesh.visible = !isMacroView);
+                    moleculesGroup.visible = !isMacroView;
+                    freeCuIons.forEach(ion => ion.visible = !isMacroView);
+                    depositingIons.forEach(ion => ion.visible = !isMacroView);
+                    if (electronParticles) electronParticles.forEach(ep => ep.mesh.visible = (isPlaying && !isMacroView));
+                    macroAnode.visible = isMacroView; macroCathodeBase.visible = isMacroView;
+                    macroCathodePlatingL.visible = isMacroView && (totalAtomsDeposited > 0);
+                    macroCathodePlatingR.visible = isMacroView && (totalAtomsDeposited > 0);
+                    liquidBox.visible = !isMacroView;
+                }
+
+                document.getElementById('plate-btn-toggle').addEventListener('click', () => setPlaying(!isPlaying));
+                document.getElementById('plate-btn-view').addEventListener('click', () => setMacroView(!isMacroView));
+                document.getElementById('plate-btn-reset').addEventListener('click', () => {
+                    setMacroView(false); setPlaying(false);
+                    if(isBulletTime) endBulletTime();
+                    simulatedTime = 0; totalAtomsMoved = 0; totalAtomsDeposited = 0; chartHistory = [];
+                    voltageScale = 1.0; concScale = 1.0; 
+                    document.getElementById('slider-voltage').value = 1.0; document.getElementById('val-voltage').innerText = '1.0x';
+                    document.getElementById('slider-conc').value = 1.0; document.getElementById('val-conc').innerText = '1.0x';
+                    document.getElementById('hud-time').innerText = "00:00";
+                    document.getElementById('hud-anode-mass').innerText = "-0.00g";
+                    document.getElementById('hud-cathode-mass').innerText = "+0.00g";
+                    drawChart(); buildScene();
+                });
+
+                const raycaster = new THREE.Raycaster();
+                const mouse = new THREE.Vector2();
+                const tooltipEl = document.getElementById('tooltip');
+                let pointerDownPos = { x: 0, y: 0 };
+                let lastTapTime = 0;
+
+                window.addEventListener('pointerdown', (e) => {
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('.hud-panel') || e.target.closest('.drawer-panel')) return;
+                    pointerDownPos.x = e.clientX;
+                    pointerDownPos.y = e.clientY;
+                    const currentTime = Date.now();
+                    const tapLength = currentTime - lastTapTime;
+                    if (tapLength > 0 && tapLength < 300) handleDoubleTap();
+                    lastTapTime = currentTime;
+                });
+
+                window.addEventListener('pointerup', (e) => {
+                    const dx = e.clientX - pointerDownPos.x;
+                    const dy = e.clientY - pointerDownPos.y;
+                    if (Math.sqrt(dx*dx + dy*dy) > 10) return; 
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('.hud-panel') || e.target.closest('.drawer-panel')) return;
+
+                    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(wrapperGroup.children, true).filter(hit => hit.object.visible);
+
+                    let foundLabel = null, fallbackLabel = null;
+                    for (let i = 0; i < intersects.length; i++) {
+                        let obj = intersects[i].object;
+                        if (obj.userData && obj.userData.label) {
+                            if (obj.userData.label === '硫酸铜溶液 (CuSO₄)') { fallbackLabel = obj.userData.label; continue; }
+                            foundLabel = obj.userData.label; break;
+                        }
+                    }
+                    foundLabel = foundLabel || fallbackLabel;
+
+                    if (foundLabel) {
+                        tooltipEl.innerText = foundLabel;
+                        tooltipEl.style.display = 'block';
+                        tooltipEl.style.left = e.clientX + 'px';
+                        tooltipEl.style.top = (e.clientY - 30) + 'px';
+                        clearTimeout(tooltipEl.timeout);
+                        tooltipEl.timeout = setTimeout(() => { tooltipEl.style.display = 'none'; }, 2000);
+                    } else { tooltipEl.style.display = 'none'; }
+                });
+
+                function handleDoubleTap() {
+                    if (isMacroView || !isPlaying || isBulletTime) return;
+                    if (freeCuIons.length > 0) {
+                        let idx = Math.floor(Math.random() * freeCuIons.length);
+                        let ion = freeCuIons[idx];
+                        if (cathodeTargets.length > 0) {
+                            freeCuIons.splice(idx, 1);
+                            ion.userData.tgt = cathodeTargets.shift(); 
+                            ion.userData.phase = Math.random()*Math.PI*2; 
+                            depositingIons.push(ion);
+                        }
+                        startBulletTime(ion);
+                    }
+                }
+
+                buildScene();
+                const eqADom = document.getElementById('eq-a');
+                const eqCDom = document.getElementById('eq-c');
+
+                return function update() {
+                    // 第一人称遇到电子时，全局时间进一步变慢
+                    let extraSlow = hasTriggeredElectrons ? 0.05 : 0.2;
+                    let timeScale = isBulletTime ? extraSlow : 1.0; 
+                    let effectiveV = voltageScale * timeScale;
+
+                    if (isPlaying) {
+                        simulatedTime += (0.016 * effectiveV);
+                        document.getElementById('hud-time').innerText = `${Math.floor(simulatedTime/60).toString().padStart(2,'0')}:${Math.floor(simulatedTime%60).toString().padStart(2,'0')}`;
+                        if (simulatedTime - lastChartUpdateTime > 0.5 * timeScale) {
+                            chartHistory.push({ cu: 1.0 * concScale, so4: 1.0 * concScale });
+                            if (chartHistory.length > 100) chartHistory.shift();
+                            drawChart(); lastChartUpdateTime = simulatedTime;
+                        }
+                    }
+
+                    // ==========================================
+                    // 第一人称追踪与迎面电子逻辑
+                    // ==========================================
+                    if (isBulletTime && trackedIon) {
+                        let ionWorldPos = new THREE.Vector3();
+                        trackedIon.getWorldPosition(ionWorldPos);
+
+                        camera.position.lerp(ionWorldPos, 0.15);
+                        if (camera.position.distanceTo(ionWorldPos) < 1.5) trackedIon.visible = false;
+                        
+                        let lookTargetWorld = new THREE.Vector3();
+                        if (trackedIon.userData.tgt) {
+                            let localTgt = new THREE.Vector3(trackedIon.userData.tgt.x, trackedIon.userData.tgt.y, trackedIon.userData.tgt.z);
+                            lookTargetWorld.copy(localTgt).applyMatrix4(wrapperGroup.matrixWorld);
+                        } else {
+                            lookTargetWorld.copy(ionWorldPos).add(new THREE.Vector3(-10, 0, 0));
+                        }
+                        controls.target.lerp(lookTargetWorld, 0.15);
+
+                        // 距离阴极板足够近时，触发迎面电子
+                        if (!hasTriggeredElectrons && camera.position.distanceTo(lookTargetWorld) < 5.0) {
+                            hasTriggeredElectrons = true;
+                            document.getElementById('tour-subtitle').innerHTML = "⚡ <b>高能预警：</b> 正在夺取阴极电子！";
+                            
+                            // 创建两颗“迎面撞击”的电子
+                            const eGeo = new THREE.SphereGeometry(0.25, 12, 12);
+                            const eMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+                            for(let i=0; i<2; i++) {
+                                let e = new THREE.Mesh(eGeo, eMat);
+                                // 电子从阴极表面飞出，朝向离子
+                                e.position.copy(lookTargetWorld).add(new THREE.Vector3(0, (i-0.5)*1.5, (i-0.5)*1.5));
+                                scene.add(e);
+                                fpsElectrons.push(e);
+                                
+                                // 迎面撞向镜头
+                                new TWEEN.Tween(e.position).to({
+                                    x: camera.position.x, 
+                                    y: camera.position.y + (Math.random()-0.5)*2, 
+                                    z: camera.position.z + (Math.random()-0.5)*2
+                                }, 1200).easing(TWEEN.Easing.Cubic.In).onComplete(()=>{
+                                    // 电子消失
+                                    scene.remove(e);
+                                    if(i === 1) triggerFPSFlash(); // 第二颗电子撞击时闪光
+                                }).start();
+                            }
+                        }
+
+                        if (!freeCuIons.includes(trackedIon) && !depositingIons.includes(trackedIon)) {
+                            trackedIon.visible = true; 
+                            document.getElementById('tour-subtitle').innerHTML = "✨ <b>成功还原！</b><br>获得 2 个电子，变为纯铜原子。";
+                            let finalCamPos = ionWorldPos.clone().add(new THREE.Vector3(4, 2, 4));
+                            new TWEEN.Tween(camera.position).to(finalCamPos, 800).easing(TWEEN.Easing.Cubic.Out).start();
+                            new TWEEN.Tween(controls.target).to(ionWorldPos, 800).easing(TWEEN.Easing.Cubic.Out).start();
+                            trackedIon = null; 
+                            setTimeout(endBulletTime, 2500);
+                        }
+                    }
+
+                    const totalAnodeAtoms = GRID_SIZE * GRID_SIZE * 4;
+                    macroAnode.scale.x = Math.max(0.001, anodeSources.length / totalAnodeAtoms);
+                    macroAnode.position.x = (ANODE_X + 0.5*SPACING) - (macroAnode.scale.x * 4*SPACING)/2;
+                    const platedRatio = totalAtomsDeposited / totalAnodeAtoms;
+                    if (platedRatio > 0 && isMacroView) {
+                        macroCathodePlatingL.visible = true; macroCathodePlatingR.visible = true;
+                        let pS = Math.max(0.001, platedRatio);
+                        macroCathodePlatingL.scale.x = pS; macroCathodePlatingL.position.x = CATHODE_X - SPACING*(0.5+pS);
+                        macroCathodePlatingR.scale.x = pS; macroCathodePlatingR.position.x = CATHODE_X + SPACING*(0.5+pS);
+                    }
+
+                    for (let ion of freeCuIons) {
+                        if (isPlaying) ion.userData.vx -= (0.002 * effectiveV);
+                        ion.userData.vx += (Math.random()-0.5)*0.015 * effectiveV;
+                        ion.userData.vy += (Math.random()-0.5)*0.015 * effectiveV;
+                        ion.userData.vz += (Math.random()-0.5)*0.015 * effectiveV;
+                        ion.userData.vx *= 0.95; ion.userData.vy *= 0.95; ion.userData.vz *= 0.95;
+                        ion.position.x += ion.userData.vx; ion.position.y += ion.userData.vy; ion.position.z += ion.userData.vz;
+                        if(ion.position.x>13) { ion.position.x=13; ion.userData.vx *= -1; }
+                        if(ion.position.x<-13) { ion.position.x=-13; ion.userData.vx *= -1; }
+                        if(ion.position.y>10 || ion.position.y<-10) ion.userData.vy *= -1;
+                        if(ion.position.z>10 || ion.position.z<-10) ion.userData.vz *= -1;
+                    }
+
+                    moleculesGroup.children.forEach(mol => {
+                        if (isPlaying && mol.userData.type === 'SO4') mol.userData.vx += (0.002 * effectiveV);
+                        mol.userData.vx += (Math.random()-0.5)*0.015 * effectiveV;
+                        mol.userData.vy += (Math.random()-0.5)*0.015 * effectiveV;
+                        mol.userData.vz += (Math.random()-0.5)*0.015 * effectiveV;
+                        mol.userData.vx *= 0.95; mol.userData.vy *= 0.95; mol.userData.vz *= 0.95;
+                        mol.position.x += mol.userData.vx; mol.position.y += mol.userData.vy; mol.position.z += mol.userData.vz;
+                        mol.rotation.x += mol.userData.rot * effectiveV; mol.rotation.y += mol.userData.rot * effectiveV;
+                        if(mol.position.x>14 || mol.position.x<-14) mol.userData.vx *= -1;
+                        if(mol.position.y>10 || mol.position.y<-10) mol.userData.vy *= -1;
+                        if(mol.position.z>10 || mol.position.z<-10) mol.userData.vz *= -1;
+                    });
+
+                    if (isPlaying) {
+                        if (anodeSources.length > 0) {
+                            electronParticles.forEach(e => {
+                                e.mesh.visible = !isMacroView; e.progress += (0.01 * effectiveV); if (e.progress > 1) e.progress -= 1;
+                                let p = e.progress, px, py;
+                                if (p<=0.25) { px=ANODE_X; py=7+(p/0.25)*11; }
+                                else if (p<=0.75) { px=ANODE_X-((p-0.25)/0.5)*(ANODE_X-CATHODE_X); py=18; }
+                                else { px=CATHODE_X; py=18-((p-0.75)/0.25)*11; }
+                                e.mesh.position.set(px, py, 0.1);
+                            });
+                        } else electronParticles.forEach(e => e.mesh.visible = false);
+
+                        if (Math.random() < (0.1 * effectiveV) && anodeSources.length > 0) {
+                            let mesh = anodeSources.shift();
+                            mesh.material = ionMaterial; mesh.visible = !isMacroView;
+                            mesh.userData.vx = -0.05; mesh.userData.vy = 0; mesh.userData.vz = 0;
+                            mesh.userData.label = '铜离子 (Cu²⁺)';
+                            freeCuIons.push(mesh); 
+                            document.getElementById('hud-anode-mass').innerText = '-' + (++totalAtomsMoved * 0.05).toFixed(2) + 'g';
+                            if (eqADom) {
+                                eqADom.classList.add('eq-active-anode');
+                                clearTimeout(eqADom.htimer);
+                                eqADom.htimer = setTimeout(() => eqADom.classList.remove('eq-active-anode'), 300 / timeScale);
+                            }
+                        }
+
+                        if (Math.random() < (0.1 * effectiveV) && freeCuIons.length > 0 && cathodeTargets.length > 0) {
+                            let closestIdx = 0, minX = Infinity;
+                            for (let i = 0; i < freeCuIons.length; i++) {
+                                if (freeCuIons[i].position.x < minX) { minX = freeCuIons[i].position.x; closestIdx = i; }
+                            }
+                            let ion = freeCuIons.splice(closestIdx, 1)[0];
+                            ion.userData.tgt = cathodeTargets.shift(); 
+                            ion.userData.phase = Math.random()*Math.PI*2; 
+                            depositingIons.push(ion);
+                            if (eqCDom) {
+                                eqCDom.classList.add('eq-active-cathode');
+                                clearTimeout(eqCDom.htimer);
+                                eqCDom.htimer = setTimeout(() => eqCDom.classList.remove('eq-active-cathode'), 300 / timeScale);
+                            }
+                        }
+                    } else electronParticles.forEach(e => e.mesh.visible = false);
+
+                    for (let idx = depositingIons.length - 1; idx >= 0; idx--) {
+                        let ion = depositingIons[idx], t = ion.userData.tgt;
+                        let dx = t.x-ion.position.x, dy = t.y-ion.position.y, dz = t.z-ion.position.z;
+                        if (Math.sqrt(dx*dx+dy*dy+dz*dz) < 0.8) {
+                            // 正常的沉积逻辑（非第一人称下的瞬间完成）
+                            // 如果是第一人称，我们会等待电子特效结束后再正式完成
+                            if (trackedIon === ion && !hasTriggeredElectrons) continue; 
+                            
+                            ion.position.set(t.x, t.y, t.z); ion.material = cuMaterial;
+                            ion.userData.label = '阴极表面的纯铜原子 (Cu)'; 
+                            depositingIons.splice(idx, 1);
+                            document.getElementById('hud-cathode-mass').innerText = '+' + (++totalAtomsDeposited * 0.05).toFixed(2) + 'g';
+                        } else {
+                            let rLen = Math.sqrt(dx*dx+dy*dy+dz*dz);
+                            ion.userData.vx += (dx/rLen * 0.02 * effectiveV); ion.userData.vy += (dy/rLen * 0.02 * effectiveV); ion.userData.vz += (dz/rLen * 0.02 * effectiveV);
+                            ion.userData.vx *= 0.90; ion.userData.vy *= 0.90; ion.userData.vz *= 0.90;
+                            ion.position.x += ion.userData.vx; 
+                            ion.position.y += ion.userData.vy + Math.sin(Date.now()*0.005+ion.userData.phase)*0.02; 
+                            ion.position.z += ion.userData.vz;
+                        }
+                    }
+
+                    const wH = window.innerWidth / 2, hH = window.innerHeight / 2;
+                    htmlElements.forEach(item => {
+                        if (isMacroView) { item.dom.style.display = 'none'; return; }
+                        let v = item.pos.clone().applyMatrix4(wrapperGroup.matrixWorld).project(camera);
+                        if (v.z > 1) item.dom.style.display = 'none';
+                        else {
+                            item.dom.style.display = 'block';
+                            item.dom.style.left = (v.x * wH + wH) + 'px'; item.dom.style.top = (-v.y * hH + hH) + 'px';
+                        }
+                    });
+                };
+            }
+            
+            updateElectroplating = addElectroplatingModel(0.4);
+            window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+            function animate() { requestAnimationFrame(animate); if (window.TWEEN) TWEEN.update(); if (updateElectroplating) updateElectroplating(); controls.update(); renderer.render(scene, camera); }
+            animate();
+        };
+    </script>
+</body>
+</html>
