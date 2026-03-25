@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>3D 电镀铜微观宇宙 - 极致沉浸版</title>
+    <title>电镀铜</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -32,11 +32,12 @@
 
         /* === 极限实验室抽屉 === */
         .drawer-panel {
-            position: absolute; right: -240px; top: 150px; width: 240px; 
+            position: absolute; right: -240px; top: 15px; width: 240px; 
             background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.2);
             border-right: none; border-radius: 12px 0 0 12px;
-            padding: 15px; color: white; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 150;
+            padding: 12px 15px; color: white; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 150;
             backdrop-filter: blur(8px); pointer-events: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.5);
+            max-height: 90vh; overflow-y: auto;
         }
         .drawer-panel.open { right: 0; }
         .drawer-handle {
@@ -46,9 +47,9 @@
             border-radius: 8px 0 0 8px; display: flex; align-items: center; justify-content: center;
             font-size: 14px; cursor: pointer; color: #38bdf8; box-shadow: -2px 0 5px rgba(0,0,0,0.3);
         }
-        .drawer-slider-row { margin-top: 15px; font-size: 13px; color: #cbd5e1; font-weight: bold; }
-        .drawer-slider-row input { width: 100%; margin-top: 8px; accent-color: #38bdf8; }
-        .drawer-hint { margin-top: 20px; font-size: 11px; color: #94a3b8; line-height: 1.5; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; }
+        .drawer-slider-row { margin-top: 10px; font-size: 13px; color: #cbd5e1; font-weight: bold; }
+        .drawer-slider-row input { width: 100%; margin-top: 5px; accent-color: #38bdf8; }
+        .drawer-hint { margin-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; }
 
         /* === 子弹时间暗角与闪光特效 === */
         .vignette {
@@ -92,7 +93,7 @@
         .eq-active-cathode { box-shadow: 0 0 15px #10b981, inset 0 0 8px #ecfdf5 !important; color: #047857 !important; border-left: 5px solid #10b981 !important; transform: translate(-50%, -50%) scale(1.1) !important; z-index: 30; }
 
         .plate-power-source { position: absolute; background: #ef4444; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; transform: translate(-50%, -50%); pointer-events: none; border: 1px solid white; z-index: 20; display: none; }
-        .tour-subtitle { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); color: #fff; padding: 12px 20px; border-radius: 12px; font-size: 15px; z-index: 100; text-align: center; max-width: 80%; line-height: 1.4; display: none; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px); }
+        .tour-subtitle { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 13px; z-index: 100; text-align: center; max-width: 80%; line-height: 1.4; display: none; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px); }
 
         .tooltip {
             position: absolute; background: rgba(30, 41, 59, 0.9); color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: bold; pointer-events: none; transform: translate(-50%, -100%); margin-top: -15px; white-space: nowrap; display: none; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px); animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -108,7 +109,7 @@
     <div id="flash-overlay"></div>
     <div id="vignette" class="vignette"></div>
 
-    <div id="top-left-ui"><div class="title">电镀铜微观宇宙</div></div>
+    <div id="top-left-ui"><div class="title">电镀铜</div></div>
 
     <div class="hud-panel" id="main-hud">
         <div style="text-align:center; color:#fff; margin-bottom:4px; font-weight:bold;">实况数据</div>
@@ -356,9 +357,9 @@
                     ]), new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 2 }));
                     atomsGroup.add(wire);
 
-                    const eMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+                    const eMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x2563eb, emissiveIntensity: 0.6 });
                     for(let i=0; i<12; i++) {
-                        const eMesh = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), eMat);
+                        const eMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), eMat);
                         eMesh.userData = { label: '电子 (e⁻)' };
                         eMesh.visible = false; atomsGroup.add(eMesh);
                         electronParticles.push({ mesh: eMesh, progress: i/12 });
@@ -567,26 +568,64 @@
                 });
 
                 function handleDoubleTap() {
-                    if (isMacroView || !isPlaying || isBulletTime) return;
-                    if (freeCuIons.length > 0) {
-                        let idx = Math.floor(Math.random() * freeCuIons.length);
-                        let ion = freeCuIons[idx];
-                        if (cathodeTargets.length > 0) {
-                            freeCuIons.splice(idx, 1);
-                            ion.userData.tgt = cathodeTargets.shift(); 
-                            ion.userData.phase = Math.random()*Math.PI*2; 
-                            depositingIons.push(ion);
-                        }
-                        startBulletTime(ion);
+                if (isMacroView || !isPlaying || isBulletTime) return;
+                if (freeCuIons.length > 0) {
+                    let idx = Math.floor(Math.random() * freeCuIons.length);
+                    let ion = freeCuIons[idx];
+                    if (cathodeTargets.length > 0) {
+                        freeCuIons.splice(idx, 1);
+                        ion.userData.tgt = cathodeTargets.shift(); 
+                        ion.userData.phase = Math.random()*Math.PI*2; 
+                        depositingIons.push(ion);
                     }
+                    startBulletTime(ion);
                 }
+            }
 
-                buildScene();
-                const eqADom = document.getElementById('eq-a');
-                const eqCDom = document.getElementById('eq-c');
+            // === 导览系统 ===
+            let tourTimeout = null;
+            const tourSteps = [
+                { cam: {x:0, y:-1, z:20}, tgt: {x:0,y:0,z:0}, text: "👋 欢迎来到电解池微观宇宙！点击屏幕任意微粒可查看化学式。", dur: 2000, act: ()=>{setPlaying(false);setMacroView(false);} },
+                { cam: {x:0, y:0, z:18}, tgt: {x:0,y:0,z:0}, text: "🔍 点击【宏观装置】，可以看到右侧为纯铜阳极，左侧为待镀件，两者浸泡在硫酸铜溶液中。", dur: 2000, act: ()=>{setMacroView(true);} },
+                { cam: {x:6, y:-1, z:8}, tgt: {x:4,y:0,z:0}, text: "⚛️ 回到微观，点击【通电】。阳极纯铜原子失去电子，变为蓝色铜离子进入溶液。", dur: 2500, act: ()=>{setMacroView(false); setPlaying(true);} },
+                { cam: {x:0, y:-1, z:12}, tgt: {x:0,y:0,z:0}, text: "🧲 通电后，阴阳离子受到电场力，产生明显的『定向移动』现象！", dur: 3500, act: ()=>{} },
+                { cam: {x:-6, y:-1, z:8}, tgt: {x:-4,y:0,z:0}, text: "⚡ 阴极附近的铜离子会近水楼台先得月，优先夺取电子并附着在铁板上。", dur: 3500, act: ()=>{} },
+                { cam: {x:0, y:-1, z:20}, tgt: {x:0,y:0,z:0}, text: "📈 右上角数据显示离子浓度保持平衡。你还可以双击微粒体验第一人称视角！", dur: 2500, act: ()=>{} }
+            ];
+            function runTour(step) {
+                if (step >= tourSteps.length) { endTour(); return; }
+                const s = tourSteps[step];
+                document.getElementById('tour-subtitle').innerHTML = s.text;
+                document.getElementById('tour-subtitle').style.display = 'block';
+                if (s.act) s.act();
+                
+                if (window.TWEEN) {
+                    new TWEEN.Tween(camera.position).to(s.cam, s.dur).easing(TWEEN.Easing.Cubic.InOut).start();
+                    new TWEEN.Tween(controls.target).to(s.tgt, s.dur).easing(TWEEN.Easing.Cubic.InOut).onUpdate(()=>controls.update())
+                        .onComplete(()=>{ tourTimeout = setTimeout(() => runTour(step+1), 3500); }).start();
+                }
+            }
+            function endTour() {
+                document.getElementById('tour-subtitle').style.display = 'none';
+                controls.enabled = true;
+                document.getElementById('btn-tour').innerText = "🎬 播放导览";
+            }
+            document.getElementById('btn-tour').addEventListener('click', function() {
+                if (this.innerText.includes("停止")) {
+                    if(window.TWEEN) TWEEN.removeAll(); clearTimeout(tourTimeout); endTour();
+                } else {
+                    this.innerText = "🛑 停止导览"; controls.enabled = false;
+                    document.getElementById('plate-btn-reset').click();
+                    setTimeout(() => runTour(0), 200);
+                }
+            });
 
-                return function update() {
-                    // 第一人称遇到电子时，全局时间进一步变慢
+            buildScene();
+            const eqADom = document.getElementById('eq-a');
+            const eqCDom = document.getElementById('eq-c');
+
+            return function update() {
+                // 第一人称遇到电子时，全局时间进一步变慢
                     let extraSlow = hasTriggeredElectrons ? 0.05 : 0.2;
                     let timeScale = isBulletTime ? extraSlow : 1.0; 
                     let effectiveV = voltageScale * timeScale;
@@ -619,34 +658,6 @@
                             lookTargetWorld.copy(ionWorldPos).add(new THREE.Vector3(-10, 0, 0));
                         }
                         controls.target.lerp(lookTargetWorld, 0.15);
-
-                        // 距离阴极板足够近时，触发迎面电子
-                        if (!hasTriggeredElectrons && camera.position.distanceTo(lookTargetWorld) < 5.0) {
-                            hasTriggeredElectrons = true;
-                            document.getElementById('tour-subtitle').innerHTML = "⚡ <b>高能预警：</b> 正在夺取阴极电子！";
-                            
-                            // 创建两颗“迎面撞击”的电子
-                            const eGeo = new THREE.SphereGeometry(0.25, 12, 12);
-                            const eMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
-                            for(let i=0; i<2; i++) {
-                                let e = new THREE.Mesh(eGeo, eMat);
-                                // 电子从阴极表面飞出，朝向离子
-                                e.position.copy(lookTargetWorld).add(new THREE.Vector3(0, (i-0.5)*1.5, (i-0.5)*1.5));
-                                scene.add(e);
-                                fpsElectrons.push(e);
-                                
-                                // 迎面撞向镜头
-                                new TWEEN.Tween(e.position).to({
-                                    x: camera.position.x, 
-                                    y: camera.position.y + (Math.random()-0.5)*2, 
-                                    z: camera.position.z + (Math.random()-0.5)*2
-                                }, 1200).easing(TWEEN.Easing.Cubic.In).onComplete(()=>{
-                                    // 电子消失
-                                    scene.remove(e);
-                                    if(i === 1) triggerFPSFlash(); // 第二颗电子撞击时闪光
-                                }).start();
-                            }
-                        }
 
                         if (!freeCuIons.includes(trackedIon) && !depositingIons.includes(trackedIon)) {
                             trackedIon.visible = true; 
@@ -730,6 +741,7 @@
                             let ion = freeCuIons.splice(closestIdx, 1)[0];
                             ion.userData.tgt = cathodeTargets.shift(); 
                             ion.userData.phase = Math.random()*Math.PI*2; 
+                            ion.userData.readyToDeposit = false;
                             depositingIons.push(ion);
                             if (eqCDom) {
                                 eqCDom.classList.add('eq-active-cathode');
@@ -743,9 +755,43 @@
                         let ion = depositingIons[idx], t = ion.userData.tgt;
                         let dx = t.x-ion.position.x, dy = t.y-ion.position.y, dz = t.z-ion.position.z;
                         if (Math.sqrt(dx*dx+dy*dy+dz*dz) < 0.8) {
-                            // 正常的沉积逻辑（非第一人称下的瞬间完成）
-                            // 如果是第一人称，我们会等待电子特效结束后再正式完成
-                            if (trackedIon === ion && !hasTriggeredElectrons) continue; 
+                            
+                            if (trackedIon === ion) {
+                                if (!hasTriggeredElectrons) {
+                                    hasTriggeredElectrons = true;
+                                    document.getElementById('tour-subtitle').innerHTML = "⚡ <b>高能预警：</b> 抵达阴极表面，迎接电子！";
+                                    
+                                    // 离子到达目标前悬停，等待电子撞击
+                                    ion.userData.vx = 0; ion.userData.vy = 0; ion.userData.vz = 0;
+                                    
+                                    // 电子从阴极板表面射出
+                                    let tgtWorld = new THREE.Vector3(t.x, t.y, t.z).applyMatrix4(wrapperGroup.matrixWorld);
+                                    const eGeo = new THREE.SphereGeometry(0.2, 12, 12);
+                                    const eMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x2563eb, emissiveIntensity: 0.6 });
+                                    
+                                    for(let i=0; i<2; i++) {
+                                        let e = new THREE.Mesh(eGeo, eMat);
+                                        e.position.copy(tgtWorld).add(new THREE.Vector3(0, (i-0.5)*1.5, (i-0.5)*1.5));
+                                        scene.add(e);
+                                        fpsElectrons.push(e);
+                                        
+                                        // 电子迎面撞向摄像机镜头
+                                        new TWEEN.Tween(e.position).to({
+                                            x: camera.position.x, 
+                                            y: camera.position.y + (Math.random()-0.5)*0.5, 
+                                            z: camera.position.z + (Math.random()-0.5)*0.5
+                                        }, 1000).easing(TWEEN.Easing.Cubic.In).onComplete(()=>{
+                                            scene.remove(e);
+                                            if(i === 1) {
+                                                triggerFPSFlash();
+                                                ion.userData.readyToDeposit = true; // 电子命中后，放行完成沉积
+                                            }
+                                        }).start();
+                                    }
+                                }
+                                // 如果动画没播完，保持悬停状态
+                                if (!ion.userData.readyToDeposit) continue; 
+                            }
                             
                             ion.position.set(t.x, t.y, t.z); ion.material = cuMaterial;
                             ion.userData.label = '阴极表面的纯铜原子 (Cu)'; 
