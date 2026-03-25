@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 强制横屏友好、禁止缩放、沉浸式全屏 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D 电解史诗仿真 APP</title>
+    <!-- 引入 Three.js 和 OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #0a0f16; margin: 0; padding: 0; overflow: hidden; width: 100vw; height: 100vh; }
+        #canvas3d { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        
+        /* 交互 UI 层 - 彻底的 HUD 边缘布局 */
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+        .interactive-ui { pointer-events: auto; }
+
+        /* 通用极致玻璃态面板 (Glassmorphism) */
+        .glass-panel {
+            background: rgba(18, 28, 38, 0.55);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            border-radius: 12px;
+            color: #f0e9d8;
+        }
+
+        /* 1. 顶部：动态方程式面板 */
+        .top-eq-panel { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); padding: 8px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 280px; }
+        .eq-title { font-size: 0.85rem; font-weight: 600; color: #8ab4f8; margin:0; }
+        .eq-content { font-size: 0.8rem; font-family: monospace; font-weight: bold; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; }
+
+        /* 2. 左侧：极简 CPK 图例 (缩紧尺寸) */
+        .left-legend { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); padding: 10px 8px; display: flex; flex-direction: column; gap: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; color: #b2c7d6; font-weight: 500; }
+        .cpk-icon { width: 20px; height: 20px; position: relative; display: flex; align-items: center; justify-content: center; transform: scale(0.75); }
+        .atom { border-radius: 50%; position: absolute; box-shadow: inset -2px -2px 5px rgba(0,0,0,0.5), inset 1px 1px 3px rgba(255,255,255,0.6), 1px 1px 2px rgba(0,0,0,0.4); }
+        .atom-k { width: 22px; height: 22px; background: #8a2be2; }
+        .atom-h { width: 12px; height: 12px; background: #e0e0e0; }
+        .atom-o { width: 18px; height: 18px; background: #dd1111; }
+        .atom-c { width: 20px; height: 20px; background: #222222; }
+        /* CSS 拼装略微简化以适应缩小版 */
+        .cpk-k .atom-k, .cpk-h .atom-h { z-index: 1; }
+        .cpk-oh .atom-o { left: 0px; top: 4px; z-index: 1; } .cpk-oh .atom-h { left: 14px; top: 12px; z-index: 2; }
+        .cpk-co3 .atom-c { z-index: 2; width: 16px; height: 16px; top: 6px; left: 6px;} .cpk-co3 .atom-o:nth-child(2) { top: 0; left: 7px; z-index: 1; width: 14px; height: 14px; } .cpk-co3 .atom-o:nth-child(3) { left: 0; bottom: 2px; z-index: 1; width: 14px; height: 14px; } .cpk-co3 .atom-o:nth-child(4) { right: 0; bottom: 2px; z-index: 1; width: 14px; height: 14px; }
+        .cpk-h2o .atom-o { top: 2px; left: 5px; z-index: 2; } .cpk-h2o .atom-h:nth-child(2) { left: 2px; top: 14px; z-index: 1; } .cpk-h2o .atom-h:nth-child(3) { right: 2px; top: 14px; z-index: 1; }
+        .cpk-gas .atom-h:nth-child(1) { left: 4px; z-index: 1; top: 8px;} .cpk-gas .atom-h:nth-child(2) { left: 12px; z-index: 2; top: 8px;}
+        .flame-icon { width: 12px; height: 12px; background: #b536e0; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 6px #b536e0; }
+
+        /* 3. 右上角：迷你产气图表 */
+        .top-right-chart { position: absolute; top: 15px; right: 15px; padding: 10px; display: none; flex-direction: column; align-items: center; gap: 5px; }
+        .chart-title { font-size: 0.65rem; color: #a1b0c0; }
+        .bars-container { display: flex; align-items: flex-end; gap: 15px; height: 60px; width: 60px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 2px; }
+        .bar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; width: 20px;}
+        .bar { width: 14px; border-radius: 3px 3px 0 0; transition: height 0.1s linear; }
+        .bar-h2 { background: #e0e0e0; box-shadow: 0 0 8px rgba(255,255,255,0.5); }
+        .bar-o2 { background: #dd1111; box-shadow: 0 0 8px rgba(221,17,17,0.5); }
+        .bar-label { font-size: 0.6rem; font-weight: bold; margin-top: 4px; }
+
+        /* 4. 右侧边缘：导播与镜头控制台 */
+        .right-camera-tools { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); padding: 8px; display: flex; flex-direction: column; gap: 12px; }
+        .tool-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .tool-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.3); }
+        .tool-btn.active-track { background: #ffaa00; border-color: #ffaa00; box-shadow: 0 0 15px rgba(255,170,0,0.6); color: #000; animation: pulse 1.5s infinite; }
+
+        /* 5. 底部：横向控制中枢 (模式 + 时间控制 + 电源) */
+        .bottom-dock { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); padding: 8px 12px; display: flex; gap: 8px; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 95vw; }
+        .bottom-dock::-webkit-scrollbar { display: none; }
+        
+        .mode-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); color: #c0cedc; font-size: 0.75rem; padding: 6px 12px; border-radius: 16px; white-space: nowrap; cursor: pointer; transition: 0.2s; }
+        .mode-btn.active { background: #ffd966; border-color: #b44f0e; color: #2f1c0a; font-weight: 600; box-shadow: 0 2px 10px rgba(255,217,102,0.3); }
+        
+        .divider { width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 4px; flex-shrink: 0; }
+        
+        /* 时空控制按钮 */
+        .time-btn { background: rgba(50, 150, 255, 0.2); border: 1px solid rgba(50, 150, 255, 0.4); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
+        .time-btn.active-slow { background: #3296ff; box-shadow: 0 0 10px rgba(50,150,255,0.6); }
+        .time-btn.active-pause { background: #e67e22; border-color: #d35400; box-shadow: 0 0 10px rgba(230,126,34,0.6); }
+
+        .power-btn { background: #e74c3c; border: 1px solid #ff7b6b; color: white; font-size: 0.8rem; font-weight: bold; padding: 6px 16px; border-radius: 16px; cursor: pointer; flex-shrink: 0; box-shadow: 0 0 15px rgba(231,76,60,0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .power-btn.off { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); box-shadow: none; color: #aaa; }
+
+        @keyframes pulse { 0% { box-shadow: 0 0 5px rgba(255,170,0,0.4); } 50% { box-shadow: 0 0 20px rgba(255,170,0,0.8); } 100% { box-shadow: 0 0 5px rgba(255,170,0,0.4); } }
+        
+        .view-hint { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="canvas3d"></div>
+
+<div class="ui-layer">
+    
+    <!-- 1. 顶部全息方程式面板 -->
+    <div class="glass-panel top-eq-panel interactive-ui" id="eqPanel">
+        <div class="eq-title" id="eqTitle">等待通电...</div>
+        <div class="eq-content" id="eqCathode" style="color:#a8c7fa; display:none;">阴极: -</div>
+        <div class="eq-content" id="eqAnode" style="color:#f28b82; display:none;">阳极: -</div>
+    </div>
+
+    <!-- 2. 左侧 CPK 图例 -->
+    <div class="glass-panel left-legend interactive-ui">
+        <div class="legend-item"><div class="cpk-icon cpk-k"><div class="atom atom-k"></div></div> K⁺</div>
+        <div class="legend-item"><div class="cpk-icon cpk-h"><div class="atom atom-h"></div></div> H⁺</div>
+        <div class="legend-item"><div class="cpk-icon cpk-oh"><div class="atom atom-o"></div><div class="atom atom-h"></div></div> OH⁻</div>
+        <div class="legend-item"><div class="cpk-icon cpk-co3"><div class="atom atom-c"></div><div class="atom atom-o"></div><div class="atom atom-o"></div><div class="atom atom-o"></div></div> CO₃²⁻</div>
+        <div class="legend-item"><div class="cpk-icon cpk-h2o"><div class="atom atom-o"></div><div class="atom atom-h"></div><div class="atom atom-h"></div></div> H₂O</div>
+        <div class="legend-item"><div class="cpk-icon cpk-gas"><div class="atom atom-h"></div><div class="atom atom-h"></div></div> H₂/O₂</div>
+        <div class="legend-item"><div class="cpk-icon"><div class="flame-icon"></div></div> 🔥</div>
+        <div class="legend-item"><span style="width:8px;height:8px;background:#fc0;border-radius:50%;box-shadow:0 0 5px #fc0;margin:0 6px;"></span> e⁻</div>
+    </div>
+
+    <!-- 3. 右上角产气柱状图 -->
+    <div class="glass-panel top-right-chart interactive-ui" id="gasChart">
+        <div class="chart-title">产气量体积比</div>
+        <div class="bars-container">
+            <div class="bar-wrapper"><div class="bar bar-h2" id="barH2" style="height: 0%;"></div><div class="bar-label" style="color:#fff;">H₂</div></div>
+            <div class="bar-wrapper"><div class="bar bar-o2" id="barO2" style="height: 0%;"></div><div class="bar-label" style="color:#f88;">O₂</div></div>
+        </div>
+    </div>
+
+    <!-- 4. 右侧边缘导播控制台 -->
+    <div class="right-camera-tools interactive-ui">
+        <div class="tool-btn" id="camGlobal" title="全局视角">🌍</div>
+        <div class="tool-btn" id="camCathode" title="阴极特写">➖</div>
+        <div class="tool-btn" id="camAnode" title="阳极特写">➕</div>
+        <div class="tool-btn" id="btnTrack" title="微观追踪">🔦</div>
+    </div>
+
+    <!-- 5. 底部时空枢纽与模式选择 (这里被补全了) -->
+    <div class="glass-panel bottom-dock interactive-ui">
+        <div class="mode-btn active" id="btnAqueous">💧草木灰溶液</div>
+        <div class="mode-btn" id="btnDry">🏜️干燥草木灰</div>
+        <div class="mode-btn" id="btnWet">✨潮湿草木灰</div>
+        <div class="mode-btn" id="btnWater">🧪电解水</div>
+        
+        <div class="divider"></div>
+        
+        <div class="time-btn" id="btnSlow" title="0.1x 慢动作">🐌</div>
+        <div class="time-btn" id="btnPause" title="暂停/播放">⏸️</div>
+        
+        <div class="divider"></div>
+        
+        <div class="power-btn off" id="powerBtn">⚡ 通电</div>
+    </div>
+</div>
+
+<script>
+window.onload = function() {
+    // --- 核心状态与 UI DOM ---
+    let mode = 'aqueous'; 
+    let experimentActive = false;
+    let isPaused = false;
+    let isSlowMo = false;
+    const speedScale = 0.3; 
+    
+    // 摄像机导播目标
+    let targetCamPos = new THREE.Vector3(0, 15, 35);
+    let targetLookAt = new THREE.Vector3(0, 3, 0);
+    let isAutoCamera = false; // 新增：是否处于自动镜头过渡状态
+    
+    // 手电筒追踪变量
+    let isTracking = false;
+    let trackedIon = null;
+
+    // 气体积
+    let gasCathode = 0; let gasAnode = 0; const MAX_GAS = 100;
+
+    const powerBtn = document.getElementById('powerBtn');
+    const eqTitle = document.getElementById('eqTitle');
+    const eqCathode = document.getElementById('eqCathode');
+    const eqAnode = document.getElementById('eqAnode');
+    const gasChart = document.getElementById('gasChart');
+    const barH2 = document.getElementById('barH2');
+    const barO2 = document.getElementById('barO2');
+    const btnTrack = document.getElementById('btnTrack');
+    const btnPause = document.getElementById('btnPause');
+    const btnSlow = document.getElementById('btnSlow');
+
+    // --- Three.js 初始化 ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0f16, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.copy(targetCamPos);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    document.getElementById('canvas3d').appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.05;
+    controls.target.copy(targetLookAt);
+
+    // --- 新增：监听用户手动操作，打断自动镜头，恢复自由视角 ---
+    controls.addEventListener('start', () => {
+        isAutoCamera = false; // 用户一碰屏幕，就关闭自动镜头强制锁定
+        if(isTracking) {
+            isTracking = false;
+            btnTrack.classList.remove('active-track');
+        }
+    });
+
+    // --- 灯光系统 (包含手电筒追踪光) ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xfff0dd, 0.8);
+    dirLight.position.set(10, 20, 10); dirLight.castShadow = true;
+    scene.add(dirLight);
+    const backLight = new THREE.DirectionalLight(0xaabbff, 0.4);
+    backLight.position.set(-10, 10, -10);
+    scene.add(backLight);
+    
+    const purpleLight = new THREE.PointLight(0xcc44ff, 0, 15);
+    purpleLight.position.set(-4, 2, 0);
+    scene.add(purpleLight);
+
+    // 追踪聚光灯 (默认隐藏)
+    const trackLight = new THREE.SpotLight(0xffffff, 0, 20, Math.PI/6, 0.8, 1);
+    trackLight.position.set(0, 10, 0);
+    scene.add(trackLight);
+    scene.add(trackLight.target);
+
+    // --- 材质与分子构建 ---
+    const materials = {
+        glass: new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.9, opacity: 1, transparent: true, roughness: 0.05, ior: 1.5, side: THREE.DoubleSide, depthWrite: false }),
+        waterBase: new THREE.MeshPhysicalMaterial({ color: 0x88ccff, transmission: 0, opacity: 0.35, transparent: true, roughness: 0.1, depthWrite: false }),
+        waterTube: new THREE.MeshPhysicalMaterial({ color: 0x4488cc, transmission: 0, opacity: 0.55, transparent: true, roughness: 0.1, depthWrite: false }),
+        dryAsh: new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: 1.0 }),
+        wetMud: new THREE.MeshStandardMaterial({ color: 0x5c4a37, roughness: 0.8, metalness: 0.1, transparent: true, opacity: 0.55 }),
+        electrodeCathode: new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 }),
+        electrodeAnode: new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 })
+    };
+
+    const cpkMats = {
+        H: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.1 }),
+        O: new THREE.MeshStandardMaterial({ color: 0xdd1111, roughness: 0.2, metalness: 0.1 }),
+        C: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4, metalness: 0.2 }),
+        K: new THREE.MeshStandardMaterial({ color: 0x8a2be2, roughness: 0.2, metalness: 0.2 })
+    };
+    const cpkGeos = { H: new THREE.SphereGeometry(0.12, 16, 16), O: new THREE.SphereGeometry(0.16, 16, 16), C: new THREE.SphereGeometry(0.18, 16, 16), K: new THREE.SphereGeometry(0.24, 16, 16) };
+
+    function buildMolecule(type) {
+        const group = new THREE.Group();
+        if (type === 'K') { group.add(new THREE.Mesh(cpkGeos.K, cpkMats.K)); }
+        else if (type === 'H') { group.add(new THREE.Mesh(cpkGeos.H, cpkMats.H)); }
+        else if (type === 'OH') { const o = new THREE.Mesh(cpkGeos.O, cpkMats.O); const h = new THREE.Mesh(cpkGeos.H, cpkMats.H); h.position.set(0, -0.16, 0); group.add(o, h); }
+        else if (type === 'H2O') { const o = new THREE.Mesh(cpkGeos.O, cpkMats.O); const h1 = new THREE.Mesh(cpkGeos.H, cpkMats.H); h1.position.set(0.13, -0.1, 0); const h2 = new THREE.Mesh(cpkGeos.H, cpkMats.H); h2.position.set(-0.13, -0.1, 0); group.add(o, h1, h2); }
+        else if (type === 'CO3') { const c = new THREE.Mesh(cpkGeos.C, cpkMats.C); const o1 = new THREE.Mesh(cpkGeos.O, cpkMats.O); o1.position.set(0, 0.2, 0); const o2 = new THREE.Mesh(cpkGeos.O, cpkMats.O); o2.position.set(0.17, -0.1, 0); const o3 = new THREE.Mesh(cpkGeos.O, cpkMats.O); o3.position.set(-0.17, -0.1, 0); group.add(c, o1, o2, o3); }
+        else if (type === 'H2') { const h1 = new THREE.Mesh(cpkGeos.H, cpkMats.H); h1.position.set(0.09, 0, 0); const h2 = new THREE.Mesh(cpkGeos.H, cpkMats.H); h2.position.set(-0.09, 0, 0); group.add(h1, h2); }
+        else if (type === 'O2') { const o1 = new THREE.Mesh(cpkGeos.O, cpkMats.O); o1.position.set(0.12, 0, 0); const o2 = new THREE.Mesh(cpkGeos.O, cpkMats.O); o2.position.set(-0.12, 0, 0); group.add(o1, o2); }
+        return group;
+    }
+
+    // --- 场景搭建 ---
+    const apparatus = new THREE.Group(); scene.add(apparatus);
+    
+    // 基础容器
+    const table = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 30), new THREE.MeshStandardMaterial({ color: 0x2a3036, roughness: 0.9 })); table.position.y = -0.5; apparatus.add(table);
+    const tankWidth = 16, tankHeight = 8, tankDepth = 10;
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(tankWidth, tankHeight, tankDepth), materials.glass); tank.position.y = tankHeight / 2; apparatus.add(tank);
+    const baseBorder = new THREE.Mesh(new THREE.BoxGeometry(tankWidth+0.4, 0.5, tankDepth+0.4), new THREE.MeshStandardMaterial({color:0x445566})); baseBorder.position.y = 0.25; apparatus.add(baseBorder);
+
+    // 内容物 (严格分层渲染)
+    const liquidMesh = new THREE.Mesh(new THREE.BoxGeometry(tankWidth-0.4, tankHeight-1, tankDepth-0.4), materials.waterBase); liquidMesh.position.y = 3.7; liquidMesh.renderOrder = 1; apparatus.add(liquidMesh);
+    const ashMesh = new THREE.Mesh(new THREE.BoxGeometry(tankWidth-0.4, 3, tankDepth-0.4), materials.dryAsh); ashMesh.position.y = 1.7; apparatus.add(ashMesh);
+    const mudMesh = new THREE.Mesh(new THREE.BoxGeometry(tankWidth-0.4, 2.5, tankDepth-0.4), materials.wetMud); mudMesh.position.y = 1.45; apparatus.add(mudMesh);
+
+    // 电极 (包裹式)
+    const elecGeo = new THREE.CylinderGeometry(0.4, 0.4, 8, 16);
+    const cathode = new THREE.Mesh(elecGeo, materials.electrodeCathode); cathode.position.set(-4, 5, 0); apparatus.add(cathode);
+    const anode = new THREE.Mesh(elecGeo, materials.electrodeAnode); anode.position.set(4, 5, 0); apparatus.add(anode);
+
+    // 试管与内部水柱
+    const tubeGroup = new THREE.Group(); apparatus.add(tubeGroup);
+    const tubeGeo = new THREE.CylinderGeometry(1.2, 1.2, 8, 16, 1, true);
+    const tubeTopGeo = new THREE.SphereGeometry(1.2, 16, 16, 0, Math.PI*2, 0, Math.PI/2);
+    
+    const tubeLeft = new THREE.Mesh(tubeGeo, materials.glass); tubeLeft.position.set(-4, 6, 0); tubeLeft.renderOrder = 3;
+    const tubeLeftTop = new THREE.Mesh(tubeTopGeo, materials.glass); tubeLeftTop.position.set(0, 4, 0); tubeLeftTop.renderOrder = 3; tubeLeft.add(tubeLeftTop); tubeGroup.add(tubeLeft);
+    const tubeRight = new THREE.Mesh(tubeGeo, materials.glass); tubeRight.position.set(4, 6, 0); tubeRight.renderOrder = 3;
+    const tubeRightTop = new THREE.Mesh(tubeTopGeo, materials.glass); tubeRightTop.position.set(0, 4, 0); tubeRightTop.renderOrder = 3; tubeRight.add(tubeRightTop); tubeGroup.add(tubeRight);
+
+    const innerWaterGeo = new THREE.CylinderGeometry(1.1, 1.1, 8, 16); innerWaterGeo.translate(0, 4, 0);
+    const waterLeft = new THREE.Mesh(innerWaterGeo, materials.waterTube); waterLeft.position.set(-4, 2, 0); waterLeft.renderOrder = 2; tubeGroup.add(waterLeft);
+    const waterRight = new THREE.Mesh(innerWaterGeo, materials.waterTube); waterRight.position.set(4, 2, 0); waterRight.renderOrder = 2; tubeGroup.add(waterRight);
+
+    // 悬浮式仪表盘 HUD 电源
+    const psGroup = new THREE.Group(); psGroup.position.set(0, 14, 0); apparatus.add(psGroup);
+    const psBody = new THREE.Mesh(new THREE.BoxGeometry(9, 3.5, 3.5), new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.4, roughness: 0.7 })); psGroup.add(psBody);
+    const psPanel = new THREE.Mesh(new THREE.BoxGeometry(8.8, 3.3, 0.1), new THREE.MeshStandardMaterial({ color: 0x111111 })); psPanel.position.set(0, 0, 1.76); psGroup.add(psPanel);
+    
+    const screenCanvas = document.createElement('canvas'); screenCanvas.width = 256; screenCanvas.height = 128; const screenCtx = screenCanvas.getContext('2d');
+    const screenTex = new THREE.CanvasTexture(screenCanvas); const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.2), new THREE.MeshBasicMaterial({ map: screenTex })); screenMesh.position.set(0, 0, 1.82); psGroup.add(screenMesh);
+    function updateAmmeter(val, active) {
+        screenCtx.fillStyle = '#0a0a0a'; screenCtx.fillRect(0, 0, 256, 128);
+        screenCtx.fillStyle = active ? '#00ff00' : '#223322'; screenCtx.font = 'bold 64px monospace'; screenCtx.textAlign = 'center'; screenCtx.textBaseline = 'middle'; screenCtx.fillText(val.toFixed(2) + ' A', 128, 64);
+        screenTex.needsUpdate = true;
+    }
+    updateAmmeter(0.00, false);
+    
+    let powerLedMat = new THREE.MeshBasicMaterial({ color: 0x333333 }); const powerLed = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), powerLedMat); powerLed.position.set(-3.8, 1.2, 1.82); psGroup.add(powerLed);
+    const termGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.8, 16);
+    const termNeg = new THREE.Mesh(termGeo, new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8 })); termNeg.position.set(-3.5, -1.8, 0.5); psGroup.add(termNeg);
+    const termPos = new THREE.Mesh(termGeo, new THREE.MeshStandardMaterial({ color: 0xaa0000, metalness: 0.8 })); termPos.position.set(3.5, -1.8, 0.5); psGroup.add(termPos);
+
+    // 智能动态导线
+    const curveTopNeg = new THREE.CatmullRomCurve3([new THREE.Vector3(-3.5, 12.2, 0.5), new THREE.Vector3(-3.8, 10.5, 0.2), new THREE.Vector3(-4, 9, 0)]);
+    const wireTopNeg = new THREE.Mesh(new THREE.TubeGeometry(curveTopNeg, 20, 0.12, 8, false), new THREE.MeshStandardMaterial({ color: 0x222222 })); apparatus.add(wireTopNeg);
+    const curveTopPos = new THREE.CatmullRomCurve3([new THREE.Vector3(3.5, 12.2, 0.5), new THREE.Vector3(3.8, 10.5, 0.2), new THREE.Vector3(4, 9, 0)]);
+    const wireTopPos = new THREE.Mesh(new THREE.TubeGeometry(curveTopPos, 20, 0.12, 8, false), new THREE.MeshStandardMaterial({ color: 0xaa2222 })); apparatus.add(wireTopPos);
+
+    // 【系统 B】电解水模式专供导线 (绕开试管，水下弯钩连接到电极底部 y=1)
+    // 修改：将原本在前方(z=1.8)下垂的导线，改到试管后方(z=-1.8)下垂，避免阻挡默认视角的视线
+    const curveBotNeg = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-3.5, 12.2, 0.5),   
+        new THREE.Vector3(-4, 11.5, -1.8),    // 向后方弯出 
+        new THREE.Vector3(-4, 4, -1.8),       // 顺着试管后方下垂
+        new THREE.Vector3(-4, 1, -1),         // 下潜到水底后，从后方向前弯钩
+        new THREE.Vector3(-4, 1, 0)           // 连接电极底部
+    ]);
+    const wireBotNeg = new THREE.Mesh(new THREE.TubeGeometry(curveBotNeg, 40, 0.12, 8, false), new THREE.MeshStandardMaterial({ color: 0x222222 })); apparatus.add(wireBotNeg);
+    
+    const curveBotPos = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(3.5, 12.2, 0.5),    
+        new THREE.Vector3(4, 11.5, -1.8),     // 向后方弯出
+        new THREE.Vector3(4, 4, -1.8),        // 顺着试管后方下垂
+        new THREE.Vector3(4, 1, -1),          // 下潜到水底后，从后方向前弯钩
+        new THREE.Vector3(4, 1, 0)            // 连接电极底部
+    ]);
+    const wireBotPos = new THREE.Mesh(new THREE.TubeGeometry(curveBotPos, 40, 0.12, 8, false), new THREE.MeshStandardMaterial({ color: 0xaa2222 })); apparatus.add(wireBotPos);
+
+    // --- 粒子系统 ---
+    const particles = new THREE.Group(); scene.add(particles);
+    const ions = []; const bubbles = []; const potassiumSparks = []; const electronPulses = [];
+
+    const eTexCanvas = document.createElement('canvas'); eTexCanvas.width = 32; eTexCanvas.height = 32; const eCtx = eTexCanvas.getContext('2d');
+    const eGrad = eCtx.createRadialGradient(16,16,0, 16,16,16); eGrad.addColorStop(0, '#fff'); eGrad.addColorStop(0.2, '#fc0'); eGrad.addColorStop(1, 'rgba(255, 150, 0, 0)'); eCtx.fillStyle = eGrad; eCtx.fillRect(0,0,32,32);
+    const electronMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(eTexCanvas), blending: THREE.AdditiveBlending, transparent: true, depthTest: false });
+
+    for(let i=0; i<60; i++) { const el = new THREE.Sprite(electronMat); el.scale.set(0.8, 0.8, 0.8); el.visible = false; particles.add(el); electronPulses.push({ mesh: el, t: 0, type: 'neg', curve: null, active: false }); }
+    for(let i=0; i<80; i++) {
+        const ionGroup = new THREE.Group(); const models = { 'K': buildMolecule('K'), 'H': buildMolecule('H'), 'OH': buildMolecule('OH'), 'CO3': buildMolecule('CO3'), 'H2O': buildMolecule('H2O') };
+        Object.values(models).forEach(m => ionGroup.add(m)); ionGroup.visible = false; particles.add(ionGroup);
+        ions.push({ group: ionGroup, models: models, type: 'none', x:0, y:0, z:0, vx:0, vy:0, vz:0, rvx:0, rvy:0, rvz:0, active: false });
+    }
+    for(let i=0; i<150; i++) {
+        const bubGroup = new THREE.Group(); const models = { 'H2': buildMolecule('H2'), 'O2': buildMolecule('O2') };
+        Object.values(models).forEach(m => bubGroup.add(m)); bubGroup.visible = false; particles.add(bubGroup);
+        bubbles.push({ group: bubGroup, models: models, type: 'none', x:0, y:0, z:0, vy:0, rvx:0, rvy:0, rvz:0, active: false, side: 0 });
+    }
+    const sparkTexCanvas = document.createElement('canvas'); sparkTexCanvas.width = 32; sparkTexCanvas.height = 32; const sCtx = sparkTexCanvas.getContext('2d');
+    const grad = sCtx.createRadialGradient(16,16,0, 16,16,16); grad.addColorStop(0, 'rgba(255, 200, 255, 1)'); grad.addColorStop(0.2, 'rgba(200, 50, 255, 0.8)'); grad.addColorStop(1, 'rgba(100, 0, 150, 0)'); sCtx.fillStyle = grad; sCtx.fillRect(0,0,32,32);
+    const sparkMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(sparkTexCanvas), blending: THREE.AdditiveBlending, transparent: true });
+    for(let i=0; i<10; i++) { const sprite = new THREE.Sprite(sparkMat); sprite.visible = false; particles.add(sprite); potassiumSparks.push({ mesh: sprite, age: 0, maxAge: 0, active: false }); }
+
+    // --- 全息方程式更新系统 ---
+    function updateEquation() {
+        if (!experimentActive) {
+            eqTitle.textContent = "等待通电..."; eqCathode.style.display = 'none'; eqAnode.style.display = 'none'; return;
+        }
+        eqTitle.textContent = "⚡ 电极反应式"; eqCathode.style.display = 'block'; eqAnode.style.display = 'block';
+        if (mode === 'aqueous') {
+            eqCathode.innerHTML = "阴极: 2H₂O + 2e⁻ ➔ H₂↑ + 2OH⁻"; eqAnode.innerHTML = "阳极: 4OH⁻ - 4e⁻ ➔ 2H₂O + O₂↑";
+        } else if (mode === 'wet') {
+            eqCathode.innerHTML = "阴极: K⁺ + e⁻ ➔ K (遇水燃烧)"; eqAnode.innerHTML = "阳极: 4OH⁻ - 4e⁻ ➔ 2H₂O + O₂↑";
+        } else if (mode === 'water') {
+            eqCathode.innerHTML = "阴极: 2H⁺ + 2e⁻ ➔ H₂↑"; eqAnode.innerHTML = "阳极: 4OH⁻ - 4e⁻ ➔ 2H₂O + O₂↑";
+        } else if (mode === 'dry') {
+            eqTitle.textContent = "🚫 无自由移动离子，无法导电"; eqCathode.style.display = 'none'; eqAnode.style.display = 'none';
+        }
+    }
+
+    // --- 核心操作逻辑 ---
+    function resetExperiment() {
+        experimentActive = false;
+        powerBtn.className = 'power-btn off'; powerBtn.textContent = "⚡ 通电";
+        powerLedMat.color.setHex(0x333333); updateAmmeter(0.00, false);
+        gasCathode = 0; gasAnode = 0; waterLeft.scale.y = 1; waterRight.scale.y = 1;
+        updateChartDOM(); updateEquation();
+        
+        ions.forEach(p => p.active = false); bubbles.forEach(b => b.active = false);
+        potassiumSparks.forEach(s => s.active = false); electronPulses.forEach(e => e.active = false);
+        purpleLight.intensity = 0;
+        
+        // 退出追踪
+        if(isTracking) { isTracking = false; btnTrack.classList.remove('active-track'); }
+    }
+
+    function updateChartDOM() {
+        if(mode !== 'water') { gasChart.style.display = 'none'; return; }
+        if(experimentActive) gasChart.style.display = 'flex';
+        barH2.style.height = `${gasCathode}%`; barO2.style.height = `${gasAnode}%`;
+    }
+
+    function initIonsForMode() {
+        if(mode === 'dry') return;
+        let activeCount = mode === 'water' ? 50 : 80; if(mode === 'wet') activeCount = 30;
+        let i = 0;
+        ions.forEach(p => {
+            if(i < activeCount) {
+                p.active = true;
+                Object.values(p.models).forEach(m => m.visible = false);
+                const r = Math.random();
+                if (mode === 'aqueous') { if (r<0.3) p.type='K'; else if (r<0.5) p.type='H'; else if (r<0.7) p.type='OH'; else if (r<0.9) p.type='CO3'; else p.type='H2O'; }
+                else if (mode === 'wet') { if (r<0.5) p.type='K'; else if (r<0.8) p.type='CO3'; else if (r<0.9) p.type='H2O'; else if (r<0.95) p.type='OH'; else p.type='H'; }
+                else if (mode === 'water') { if (r<0.4) p.type='H'; else if (r<0.8) p.type='OH'; else p.type='H2O'; }
+                p.models[p.type].visible = true;
+                p.rvx = (Math.random()-0.5)*0.1; p.rvy = (Math.random()-0.5)*0.1; p.rvz = (Math.random()-0.5)*0.1;
+                const rangeY = mode === 'wet' ? 2 : 5; const startY = mode === 'wet' ? 1.5 : 2;
+                p.x = (Math.random() - 0.5) * 14; p.y = startY + Math.random() * rangeY; p.z = (Math.random() - 0.5) * 8;
+                p.vx = (Math.random()-0.5)*0.02; p.vy = (Math.random()-0.5)*0.02; p.vz = (Math.random()-0.5)*0.02;
+            } else p.active = false;
+            i++;
+        });
+    }
+
+    function spawnBubble(side) {
+        const b = bubbles.find(bub => !bub.active);
+        if(b) {
+            b.active = true; b.side = side; b.type = side === -1 ? 'H2' : 'O2';
+            Object.values(b.models).forEach(m => m.visible = false); b.models[b.type].visible = true;
+            const r = 0.4 + Math.random() * 0.1; const angle = Math.random() * Math.PI * 2;
+            b.x = (side===-1 ? -4 : 4) + Math.cos(angle) * r; b.z = Math.sin(angle) * r;
+            if(mode === 'water') { const waterTop = 2 + 8 * (1 - (side===-1 ? gasCathode : gasAnode) / MAX_GAS); b.y = 1 + Math.random() * (Math.min(9, waterTop) - 1); }
+            else { b.y = 1 + Math.random() * 8; }
+            b.vy = 0.05 + Math.random() * 0.05;
+            b.rvx = (Math.random()-0.5)*0.2; b.rvy = (Math.random()-0.5)*0.2; b.rvz = (Math.random()-0.5)*0.2;
+        }
+    }
+
+    function spawnPotassiumSpark() {
+        const s = potassiumSparks.find(sp => !sp.active);
+        if(s) {
+            s.active = true; s.age = 0; s.maxAge = 40 + Math.random()*20;
+            const angle = Math.random() * Math.PI * 2;
+            s.mesh.position.set(-4 + Math.cos(angle)*0.5, 2.5 + Math.random()*0.5, Math.sin(angle)*0.5);
+            purpleLight.intensity = 1.5;
+        }
+    }
+
+    function spawnElectron(wireType) {
+        const e = electronPulses.find(p => !p.active);
+        if(e) {
+            e.active = true; e.type = wireType; e.t = wireType === 'neg' ? 0 : 1;
+            e.curve = mode === 'water' ? (wireType === 'neg' ? curveBotNeg : curveBotPos) : (wireType === 'neg' ? curveTopNeg : curveTopPos);
+        }
+    }
+
+    function setMode(newMode) {
+        resetExperiment(); mode = newMode;
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        liquidMesh.visible = false; ashMesh.visible = false; mudMesh.visible = false; tubeGroup.visible = false;
+        if (mode === 'water') { wireTopNeg.visible=false; wireTopPos.visible=false; wireBotNeg.visible=true; wireBotPos.visible=true; tubeGroup.visible = true; liquidMesh.visible = true; }
+        else { wireTopNeg.visible=true; wireTopPos.visible=true; wireBotNeg.visible=false; wireBotPos.visible=false; }
+
+        if (mode === 'aqueous') { document.getElementById('btnAqueous').classList.add('active'); liquidMesh.visible = true; }
+        else if (mode === 'dry') { document.getElementById('btnDry').classList.add('active'); ashMesh.visible = true; }
+        else if (mode === 'wet') { document.getElementById('btnWet').classList.add('active'); mudMesh.visible = true; }
+        else if (mode === 'water') { document.getElementById('btnWater').classList.add('active'); }
+        initIonsForMode();
+    }
+
+    // --- 事件监听 ---
+    document.getElementById('btnAqueous').addEventListener('click', () => setMode('aqueous'));
+    document.getElementById('btnDry').addEventListener('click', () => setMode('dry'));
+    document.getElementById('btnWet').addEventListener('click', () => setMode('wet'));
+    document.getElementById('btnWater').addEventListener('click', () => setMode('water'));
+
+    powerBtn.addEventListener('click', () => {
+        experimentActive = !experimentActive;
+        if(experimentActive) {
+            powerBtn.classList.remove('off'); powerBtn.textContent = "🚫 断电";
+            powerLedMat.color.setHex(0x00ff00);
+            if(mode === 'water') { gasCathode = 0; gasAnode = 0; }
+        } else {
+            powerBtn.classList.add('off'); powerBtn.textContent = "⚡ 通电";
+            powerLedMat.color.setHex(0x333333); updateAmmeter(0.00, false); purpleLight.intensity = 0;
+            if(isTracking) { isTracking = false; btnTrack.classList.remove('active-track'); }
+        }
+        updateChartDOM(); updateEquation();
+    });
+
+    // 时空控制
+    btnPause.addEventListener('click', () => { isPaused = !isPaused; btnPause.classList.toggle('active-pause'); });
+    btnSlow.addEventListener('click', () => { isSlowMo = !isSlowMo; btnSlow.classList.toggle('active-slow'); });
+
+    // 导播热键 (点击时激活自动镜头)
+    document.getElementById('camGlobal').addEventListener('click', () => { targetCamPos.set(0, 15, 35); targetLookAt.set(0, 3, 0); isTracking=false; isAutoCamera=true; btnTrack.classList.remove('active-track');});
+    document.getElementById('camCathode').addEventListener('click', () => { targetCamPos.set(-4, 5, 8); targetLookAt.set(-4, 5, 0); isTracking=false; isAutoCamera=true; btnTrack.classList.remove('active-track');});
+    document.getElementById('camAnode').addEventListener('click', () => { targetCamPos.set(4, 5, 8); targetLookAt.set(4, 5, 0); isTracking=false; isAutoCamera=true; btnTrack.classList.remove('active-track');});
+    
+    // 微观追踪聚光灯
+    btnTrack.addEventListener('click', () => {
+        if(!experimentActive || mode === 'dry') return;
+        isTracking = !isTracking;
+        if(isTracking) {
+            isAutoCamera = true; // 开启自动镜头锁定微粒
+            btnTrack.classList.add('active-track');
+            trackedIon = ions.find(i => i.active && i.y > 2); // 随机选个活的
+        } else {
+            isAutoCamera = true; // 自动飞回全局视角
+            btnTrack.classList.remove('active-track');
+            targetCamPos.set(0, 15, 35); targetLookAt.set(0, 3, 0);
+        }
+    });
+
+    // --- 动画主循环 ---
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        // 1. 镜头补间动画 (Lerp) - 修复：仅在开启自动镜头时才强制锁定！
+        if (isAutoCamera) {
+            camera.position.lerp(targetCamPos, 0.08);
+            controls.target.lerp(targetLookAt, 0.08);
+        }
+        controls.update();
+
+        // 2. 微观追踪逻辑
+        if(isTracking && trackedIon && trackedIon.active) {
+            // 在追踪模式下，实时更新自动镜头的目标点
+            targetLookAt.copy(trackedIon.group.position);
+            targetCamPos.set(trackedIon.x, trackedIon.y + 4, trackedIon.z + 8);
+            trackLight.intensity = 2;
+            trackLight.position.set(trackedIon.x, trackedIon.y + 6, trackedIon.z);
+            trackLight.target.position.copy(trackedIon.group.position);
+            ambientLight.intensity = 0.1; dirLight.intensity = 0.1; // 压暗环境
+        } else {
+            trackLight.intensity = 0;
+            ambientLight.intensity = 0.6; dirLight.intensity = 0.8;
+            if(isTracking && experimentActive) { trackedIon = ions.find(i => i.active); } // 离子消失后换一个
+        }
+
+        // 3. 计算时间因子
+        const dt = isPaused ? 0 : (isSlowMo ? 0.1 : 1.0);
+        const curSpeedScale = speedScale * dt;
+
+        // 4. 电表与电子流
+        if (experimentActive && !isPaused) {
+            let baseC = 0; if(mode==='aqueous') baseC=2.45; else if(mode==='wet') baseC=0.65; else if(mode==='water') baseC=1.95;
+            if (baseC > 0) {
+                updateAmmeter(baseC + (Math.random()-0.5)*0.04, true);
+                if (Math.random() < baseC * 0.1 * curSpeedScale) { spawnElectron('neg'); spawnElectron('pos'); }
+            }
+        }
+        
+        electronPulses.forEach(e => {
+            if(!e.active) { e.mesh.visible = false; return; }
+            e.mesh.visible = true;
+            if(dt > 0) { e.t += (e.type === 'neg' ? 0.03*dt : -0.03*dt); }
+            if(e.t >= 1 || e.t <= 0) e.active = false;
+            if(e.active && e.curve) e.mesh.position.copy(e.curve.getPointAt(e.t));
+        });
+
+        // 5. 离子运动物理引擎
+        ions.forEach(p => {
+            if(!p.active) { p.group.visible = false; return; }
+            p.group.visible = true;
+            
+            if (experimentActive && mode !== 'dry' && dt > 0) {
+                const E_field = 0.015 * curSpeedScale;
+                if (p.type === 'K' || p.type === 'H') p.vx -= E_field;
+                else if (p.type === 'OH' || p.type === 'CO3') p.vx += E_field;
+
+                p.vx = p.vx * 0.95 + (Math.random()-0.5)*0.01 * curSpeedScale;
+                p.vy = p.vy * 0.95 + (Math.random()-0.5)*0.01 * curSpeedScale;
+                p.vz = p.vz * 0.95 + (Math.random()-0.5)*0.01 * curSpeedScale;
+
+                p.x += p.vx; p.y += p.vy; p.z += p.vz;
+
+                const limitX = 7, limitZ = 4.5; let limitYMin = 2, limitYMax = 7; if(mode === 'wet') { limitYMin = 1.5; limitYMax = 3.5; }
+                if (p.x < -limitX) { p.x = -limitX; p.vx *= -0.5; } if (p.x > limitX) { p.x = limitX; p.vx *= -0.5; }
+                if (p.y < limitYMin) { p.y = limitYMin; p.vy *= -0.5; } if (p.y > limitYMax) { p.y = limitYMax; p.vy *= -0.5; }
+                if (p.z < -limitZ) { p.z = -limitZ; p.vz *= -0.5; } if (p.z > limitZ) { p.z = limitZ; p.vz *= -0.5; }
+
+                if ((p.type === 'H' || p.type === 'K') && p.x < -3.5) p.x = 2 + Math.random()*4;
+                if ((p.type === 'OH' || p.type === 'CO3') && p.x > 3.5) p.x = -2 - Math.random()*4;
+            }
+            
+            p.group.position.set(p.x, p.y, p.z);
+            if(dt > 0) { p.group.rotation.x += p.rvx * dt; p.group.rotation.y += p.rvy * dt; p.group.rotation.z += p.rvz * dt; }
+        });
+
+        // 6. 宏观反应现象 (气泡、降液面、燃烧)
+        if (experimentActive && mode !== 'dry' && dt > 0) {
+            if(mode === 'aqueous' || mode === 'water') {
+                if(Math.random() < 0.4 * dt) spawnBubble(-1);
+                if(Math.random() < 0.2 * dt) spawnBubble(1);
+            } else if (mode === 'wet') {
+                if(Math.random() < 0.05 * dt) spawnBubble(1);
+                if(Math.random() < 0.08 * dt) spawnPotassiumSpark();
+                purpleLight.intensity *= 0.95;
+            }
+
+            if(mode === 'water') {
+                if(gasCathode < MAX_GAS) gasCathode += 0.2 * curSpeedScale;
+                if(gasAnode < MAX_GAS) gasAnode += 0.1 * curSpeedScale;
+                waterLeft.scale.y += (Math.max(0.01, 1 - gasCathode/MAX_GAS) - waterLeft.scale.y) * 0.1;
+                waterRight.scale.y += (Math.max(0.01, 1 - gasAnode/MAX_GAS) - waterRight.scale.y) * 0.1;
+                updateChartDOM();
+            }
+        }
+
+        bubbles.forEach(b => {
+            if(!b.active) { b.group.visible = false; return; }
+            b.group.visible = true;
+            if(dt > 0) {
+                b.y += b.vy * dt;
+                b.x += Math.sin(b.y * 10) * 0.01 * curSpeedScale;
+                let topLimit = mode==='water' ? 2 + 8 * (1 - (b.side===-1 ? gasCathode : gasAnode) / MAX_GAS) : 7;
+                if(b.y > topLimit) b.active = false;
+                b.group.rotation.x += b.rvx * dt; b.group.rotation.y += b.rvy * dt; b.group.rotation.z += b.rvz * dt;
+            }
+            b.group.position.set(b.x, b.y, b.z);
+        });
+
+        potassiumSparks.forEach(s => {
+            if(!s.active) { s.mesh.visible = false; return; }
+            s.mesh.visible = true;
+            if(dt > 0) {
+                s.age += curSpeedScale; s.mesh.position.y += 0.02 * curSpeedScale;
+                const scale = 0.5 * Math.sin((s.age/s.maxAge) * Math.PI); s.mesh.scale.set(scale+0.5, scale+0.5, scale+0.5);
+                s.mesh.material.opacity = 1 - (s.age/s.maxAge);
+                if(s.age >= s.maxAge) s.active = false;
+            }
+        });
+
+        renderer.render(scene, camera);
+    }
+
+    setMode('aqueous');
+    animate();
+
+    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+};
+</script>
+</body>
+</html>
