@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>微粒放电顺序三维立体模型</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            color: #333;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* 3D 场景中的 HTML 元素样式 */
+        .plane-left {
+            width: 800px;
+            height: 400px;
+            background: rgba(235, 240, 245, 0.85);
+            backdrop-filter: blur(4px);
+            border-right: 3px solid rgba(0,0,0,0.1);
+            box-shadow: -20px 20px 50px rgba(0,0,0,0.2);
+        }
+
+        .plane-right {
+            width: 800px;
+            height: 400px;
+            background: rgba(200, 225, 250, 0.85);
+            backdrop-filter: blur(4px);
+            box-shadow: 20px 20px 50px rgba(0,0,0,0.2);
+        }
+
+        /* 坐标轴 */
+        .axis-x {
+            width: 1600px;
+            height: 4px;
+            background: #222;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .axis-x::after {
+            content: '';
+            position: absolute;
+            right: -15px;
+            top: -8px;
+            border-left: 20px solid #222;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+        }
+
+        .axis-y {
+            width: 4px;
+            height: 600px;
+            background: #222;
+            position: relative;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+        }
+        .axis-y::before {
+            content: '';
+            position: absolute;
+            top: -15px;
+            left: -8px;
+            border-bottom: 20px solid #222;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+        }
+
+        /* 离子卡片 */
+        .ion-card {
+            color: #d32f2f;
+            font-size: 26px;
+            font-weight: 900;
+            text-shadow: 1px 1px 0px #fff, -1px -1px 0px #fff, 1px -1px 0px #fff, -1px 1px 0px #fff, 0px 5px 15px rgba(211,47,47,0.4);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 12px;
+            border: 2px solid transparent;
+            position: relative; /* 关键：用于定位悬浮提示框 */
+        }
+        
+        .ion-card:hover {
+            transform: scale(1.6) translateZ(40px) !important;
+            background: rgba(255, 255, 255, 0.95);
+            border-color: #d32f2f;
+            box-shadow: 0 10px 30px rgba(211, 47, 47, 0.5);
+            z-index: 100;
+        }
+
+        /* 放电产物悬浮提示框 (Tooltip) */
+        .ion-card::after {
+            content: attr(data-product);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 30, 45, 0.9);
+            color: #ffd700; /* 金色字体，强调产物 */
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            pointer-events: none;
+            text-shadow: none;
+        }
+
+        /* 提示框向下的小三角 */
+        .ion-card::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px;
+            border-style: solid;
+            border-color: rgba(20, 30, 45, 0.9) transparent transparent transparent;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        /* 鼠标悬停时显示提示框并伴随轻微上浮 */
+        .ion-card:hover::after {
+            opacity: 1;
+            visibility: visible;
+            bottom: 115%; 
+        }
+
+        .ion-card:hover::before {
+            opacity: 1;
+            visibility: visible;
+            bottom: calc(115% - 12px);
+        }
+
+        /* 箭头 */
+        .arrow {
+            color: #d32f2f;
+            font-size: 24px;
+            font-weight: bold;
+            opacity: 0.8;
+        }
+
+        /* 强弱标签 */
+        .label-huge {
+            font-size: 110px;
+            font-weight: 900;
+            color: #4caf50;
+            text-shadow: 0 0 20px rgba(76, 175, 80, 0.6), 0 0 40px rgba(76, 175, 80, 0.3);
+            letter-spacing: 5px;
+            font-family: 'Kaiti', 'STKaiti', serif;
+        }
+
+        /* 普通文本标签 */
+        .label-text {
+            font-size: 22px;
+            color: #2c3e50;
+            font-weight: bold;
+            text-shadow: 1px 1px 5px rgba(255,255,255,0.8);
+            text-align: center;
+        }
+
+        .label-desc {
+            font-size: 18px;
+            color: #444;
+            letter-spacing: 1px;
+        }
+
+        /* 干扰离子高亮竖排 */
+        .highlight-column {
+            width: 90px;
+            height: 350px;
+            background: linear-gradient(to bottom, rgba(30, 144, 255, 0.05) 0%, rgba(0, 102, 255, 0.3) 50%, rgba(0, 50, 180, 0.85) 100%);
+            border-radius: 45px;
+            pointer-events: none;
+            box-shadow: 0 15px 35px rgba(0, 50, 180, 0.4);
+            border: 1px solid rgba(30, 144, 255, 0.2);
+            border-bottom: 2px solid rgba(0, 50, 180, 0.9);
+            backdrop-filter: blur(2px);
+        }
+
+        /* UI 提示层 */
+        #ui-hint {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            pointer-events: none;
+            letter-spacing: 1px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(255,255,255,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+        }
+
+        /* ========== 返回主页按钮样式 ========== */
+        .global-back-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 200;
+            pointer-events: auto;
+            font-family: inherit;
+        }
+        .global-back-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <!-- ========== 返回主页按钮（左下角） ========== -->
+    <button id="back-to-home" class="global-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        返回知识图谱
+    </button>
+
+    <div id="canvas-container"></div>
+    <div id="ui-hint">🖱️ 拖动鼠标旋转视角 | 滚轮缩放 | 悬停查看微粒及放电产物</div>
+
+    <!-- 引入 Three.js 及其扩展库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // ========== 返回主页函数 ==========
+        function goBackHome() {
+            let currentPath = window.location.pathname;
+            let baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            let targetUrl = baseDir + 'index.html';
+            let debugDiv = document.createElement('div');
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.bottom = '100px';
+            debugDiv.style.left = '10px';
+            debugDiv.style.background = 'rgba(0,0,0,0.7)';
+            debugDiv.style.color = 'white';
+            debugDiv.style.padding = '8px';
+            debugDiv.style.borderRadius = '8px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.innerText = '返回主页: ' + targetUrl;
+            document.body.appendChild(debugDiv);
+            setTimeout(() => debugDiv.remove(), 1500);
+            window.location.href = targetUrl;
+        }
+
+        document.getElementById('back-to-home').addEventListener('click', goBackHome);
+
+        // ========== 原有代码（未作任何功能改动） ==========
+        let camera, scene, renderer, controls;
+        let diagramGroup;
+        const ionObjects = []; // 存储离子对象以实现悬浮动画
+
+        init();
+        animate();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. 初始化场景和相机
+            scene = new THREE.Scene();
+            
+            // 视角拉远以便看清全貌
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.set(0, 0, 1800); 
+
+            // 2. 初始化 CSS3D 渲染器
+            renderer = new THREE.CSS3DRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            // 3. 初始化控制器
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 3500;
+            controls.minDistance = 600;
+
+            // --- 4. 构建 3D 图表组 ---
+            diagramGroup = new THREE.Group();
+            scene.add(diagramGroup);
+
+            // 背景板 (分为左右，Z 轴稍微靠后)
+            createCSS3DObject('<div class="plane-left"></div>', -400, 0, -50, diagramGroup);
+            createCSS3DObject('<div class="plane-right"></div>', 400, 0, -50, diagramGroup);
+
+            // 坐标轴 (Z = 0)
+            createCSS3DObject('<div class="axis-x"></div>', 0, 0, 0, diagramGroup);
+            createCSS3DObject('<div class="axis-y"></div>', 0, 0, 0, diagramGroup);
+
+            // 干扰离子高亮背板 (放置在水放电区 H+ 和 OH- 的正后方，Z = 15，位置略微偏下强调底部)
+            createCSS3DObject('<div class="highlight-column"></div>', 50, -20, 15, diagramGroup);
+
+            // 大标签和区域文字 (Z = 20，悬浮在背景和轴线前)
+            createCSS3DObject('<div class="label-huge">强</div>', -650, 220, 20, diagramGroup);
+            createCSS3DObject('<div class="label-huge">弱</div>', 650, 220, 20, diagramGroup);
+            
+            // 将“（酸）”分离出来，并将其 x 坐标设置为 -315，精准对齐下方左侧的 H+ 微粒
+            createCSS3DObject('<div class="label-text">自身放电</div>', -400, 180, 20, diagramGroup);
+            createCSS3DObject('<div class="label-text">（酸）</div>', -315, 110, 20, diagramGroup);
+            
+            createCSS3DObject('<div class="label-text">水放电</div>', 400, 160, 20, diagramGroup);
+            
+            createCSS3DObject('<div class="label-text">（水）</div>', 40, 260, 20, diagramGroup);
+            createCSS3DObject('<div class="label-text">（水）</div>', 40, -260, 20, diagramGroup);
+            
+            createCSS3DObject('<div class="label-desc">阳离子氧化性</div>', 700, 30, 20, diagramGroup);
+            createCSS3DObject('<div class="label-desc">阴离子还原性</div>', 700, -30, 20, diagramGroup);
+
+            // --- 5. 渲染离子微粒序列 ---
+            const yCation = 40;   // 阳离子 Y 坐标
+            const yAnion = -40;   // 阴离子 Y 坐标
+            const zIons = 30;     // 离子的基础 Z 深度
+
+            // 数据定义 (包含文字 t、X 轴位置 x、放电产物 p)
+            const cationsData = [
+                { t: 'Ag<sup>+</sup>', x: -700, p: 'Ag' }, { t: '>', x: -635 },
+                { t: 'Fe<sup>3+</sup>', x: -570, p: 'Fe²⁺' }, { t: '>', x: -500 },
+                { t: 'Cu<sup>2+</sup>', x: -440, p: 'Cu' }, { t: '>', x: -375 },
+                { t: 'H<sup>+</sup>', x: -315, p: 'H₂↑' }, { t: '>', x: -260 },
+                { t: 'Fe<sup>2+</sup>', x: -200, p: 'Fe' }, { t: '>', x: -130 },
+                { t: 'Zn<sup>2+</sup>', x: -60, p: 'Zn' }, { t: '>', x: 0 },
+                { t: 'H<sup>+</sup>', x: 50, p: 'H₂↑' }, { t: '>', x: 100 },
+                { t: 'Al<sup>3+</sup>', x: 160, p: 'H₂↑ (水放电)' }, { t: '>', x: 220 },
+                { t: 'Mg<sup>2+</sup>', x: 280, p: 'H₂↑ (水放电)' }, { t: '>', x: 345 },
+                { t: 'Na<sup>+</sup>', x: 405, p: 'H₂↑ (水放电)' }, { t: '>', x: 465 },
+                { t: 'Ca<sup>2+</sup>', x: 525, p: 'H₂↑ (水放电)' }, { t: '>', x: 590 },
+                { t: 'K<sup>+</sup>', x: 650, p: 'H₂↑ (水放电)' }
+            ];
+
+            const anionsData = [
+                { t: '活泼电极', x: -660, p: '金属阳离子' }, { t: '>', x: -555 },
+                { t: 'S<sup>2-</sup>', x: -480, p: 'S↓' }, { t: '>', x: -415 },
+                { t: 'I<sup>-</sup>', x: -355, p: 'I₂' }, { t: '>', x: -300 },
+                { t: 'Br<sup>-</sup>', x: -240, p: 'Br₂' }, { t: '>', x: -180 },
+                { t: 'Cl<sup>-</sup>', x: -120, p: 'Cl₂↑' }, { t: '>', x: -50 },
+                { t: 'OH<sup>-</sup>', x: 50, p: 'O₂↑ + H₂O' }, { t: '>', x: 110 },
+                { t: '最高价含氧酸根', x: 250, p: 'O₂↑ (水放电)' }, { t: '>', x: 395 },
+                { t: 'F<sup>-</sup>', x: 460, p: 'O₂↑ (水放电)' }
+            ];
+
+            // 遍历并生成 3D 对象
+            cationsData.forEach(item => {
+                const isArrow = item.t === '>';
+                const className = isArrow ? 'arrow' : 'ion-card';
+                // 让左边（强）的离子在 Z 轴上稍微凸出，右边（弱）的稍微靠后，增强 3D 感
+                const zOffset = isArrow ? 0 : (-item.x * 0.05); 
+                // 添加 data-product 属性
+                const productAttr = item.p ? `data-product="产物: ${item.p}"` : '';
+                const obj = createCSS3DObject(`<div class="${className}" ${productAttr}>${item.t}</div>`, item.x, yCation, zIons + zOffset, diagramGroup);
+                if (!isArrow) {
+                    obj.userData = { baseY: yCation, randomPhase: Math.random() * Math.PI * 2 };
+                    ionObjects.push(obj);
+                }
+            });
+
+            anionsData.forEach(item => {
+                const isArrow = item.t === '>';
+                const className = isArrow ? 'arrow' : 'ion-card';
+                const zOffset = isArrow ? 0 : (-item.x * 0.05);
+                // 添加 data-product 属性
+                const productAttr = item.p ? `data-product="产物: ${item.p}"` : '';
+                const obj = createCSS3DObject(`<div class="${className}" ${productAttr}>${item.t}</div>`, item.x, yAnion, zIons + zOffset, diagramGroup);
+                if (!isArrow) {
+                    obj.userData = { baseY: yAnion, randomPhase: Math.random() * Math.PI * 2 };
+                    ionObjects.push(obj);
+                }
+            });
+
+            // 初始化角度，微调视角
+            // 修正：大幅减小了默认的倾斜和旋转角度，消除“向左下方斜”的视觉错觉
+            diagramGroup.rotation.y = 0.10;
+            diagramGroup.rotation.x = 0.02;
+            diagramGroup.rotation.z = 0;
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        // 辅助函数：创建 CSS3D 对象
+        function createCSS3DObject(html, x, y, z, parent) {
+            const div = document.createElement('div');
+            // 为了保证交互效果，使用一个透明 wrapper 包裹实际元素
+            div.style.transformStyle = 'preserve-3d'; 
+            div.innerHTML = html;
+            
+            const object = new THREE.CSS3DObject(div);
+            object.position.set(x, y, z);
+            parent.add(object);
+            return object;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 增加微粒的上下悬浮动画效果
+            const time = Date.now() * 0.002;
+            ionObjects.forEach((obj) => {
+                obj.position.y = obj.userData.baseY + Math.sin(time + obj.userData.randomPhase) * 6;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
