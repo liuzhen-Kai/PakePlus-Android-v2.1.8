@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>氯碱工业：离子膜法电解流程 3D 模型</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        
+        /* 主标题样式 */
+        #main-title {
+            position: absolute;
+            top: 20px;
+            left: 30px;
+            margin: 0;
+            font-size: 36px;
+            font-weight: 900;
+            color: #1565c0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.15);
+            letter-spacing: 2px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .label {
+            position: absolute;
+            background: rgba(240, 240, 240, 0.9);
+            color: #222;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: opacity 0.2s;
+            text-align: center;
+        }
+        .label-title {
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 3px;
+        }
+        .label-reaction {
+            font-family: monospace;
+            color: #2e7d32;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        /* 反应过程分析面板 (弹窗样式) */
+        #narrative-panel {
+            position: absolute;
+            bottom: 90px;
+            left: 50px;
+            background: rgba(255, 255, 255, 0.95);
+            border-left: 5px solid #1976d2;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            pointer-events: auto;
+            max-width: 320px;
+            z-index: 150;
+            display: none; /* 初始隐藏 */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            transform-origin: bottom left;
+        }
+        #narrative-panel.show {
+            display: block;
+            opacity: 1;
+            animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes popUp {
+            0% { transform: scale(0.8) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        #narrative-panel h3 { margin: 0 0 10px 0; font-size: 16px; color: #333; }
+        #narrative-text { font-size: 14px; color: #555; line-height: 1.6; }
+        .highlight-step { color: #d32f2f; font-weight: bold; }
+        
+        /* 右下角图例 */
+        #legend-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            pointer-events: auto;
+            border: 1px solid #ddd;
+        }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; color: #333;}
+        .legend-item:last-child { margin-bottom: 0; }
+        .color-dot { width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; border: 1px solid #999;}
+
+        /* 统一底部控制面板 */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 25px;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            border: 1px solid #ddd;
+            pointer-events: auto;
+            width: max-content;
+            max-width: 90vw;
+            transition: opacity 0.5s ease;
+        }
+        
+        .control-btn {
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #1976d2;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .control-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        .control-btn:active { transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .control-btn:disabled { background-color: #999; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        /* 各个按钮独立颜色 */
+        .btn-info { background-color: #00897b; }
+        .btn-info:hover { background-color: #00695c; }
+        .btn-info.active { background-color: #004d40; box-shadow: inset 0 3px 6px rgba(0,0,0,0.4); transform: translateY(1px); }
+        
+        .btn-view { background: linear-gradient(135deg, #2196f3, #0d47a1); }
+        .btn-view.concrete-active { background: linear-gradient(135deg, #ff9800, #e65100); }
+        
+        .btn-tour { background: linear-gradient(135deg, #9c27b0, #673ab7); }
+        
+        .btn-fault { background-color: #f57c00; }
+        .btn-fault:hover { background-color: #ef6c00; }
+        
+        .btn-reset { background-color: #d32f2f; }
+        .btn-reset:hover { background-color: #c62828; }
+        
+        /* 微观放大镜弹窗 */
+        #magnifier-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            z-index: 100; display: none; width: 420px; border-top: 5px solid #ffcc00;
+        }
+        .micro-ion { position: absolute; width: 30px; height: 30px; border-radius: 50%; color: white; text-align: center; line-height: 30px; font-size: 11px; font-weight: bold; font-family: sans-serif; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .na-ion { background: #888; top: 60px; animation: na-pass 3s infinite ease-in-out; }
+        .cl-ion { background: #22cc22; top: 20px; animation: cl-bounce 3s infinite ease-in-out; }
+        .oh-ion { background: #cc2222; top: 100px; animation: oh-bounce 3s infinite ease-in-out; right: 0;}
+        @keyframes na-pass { 0% { left: 5%; } 50% { left: 50%; transform: translateX(-50%) scale(0.8); } 100% { left: 85%; } }
+        @keyframes cl-bounce { 0% { left: 5%; } 50% { left: 35%; } 100% { left: 5%; } }
+        @keyframes oh-bounce { 0% { right: 5%; } 50% { right: 35%; } 100% { right: 5%; } }
+        
+        /* 交互提示气泡 */
+        #click-hint {
+            position: absolute; padding: 6px 12px; background: rgba(0,0,0,0.75); color: #fff;
+            border-radius: 6px; font-size: 13px; font-weight: bold; pointer-events: none; 
+            display: none; transform: translate(-50%, -150%); z-index: 50; transition: opacity 0.2s;
+        }
+
+        /* 导览字幕样式 */
+        #tour-subtitle {
+            position: absolute; 
+            bottom: 25px; 
+            left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85); color: #fff; 
+            padding: 12px 30px; 
+            border-radius: 8px; 
+            font-size: 15px; 
+            text-align: center; max-width: 80%; z-index: 250; 
+            display: none; pointer-events: none; 
+            border-bottom: 3px solid #ffcc00; 
+            transition: opacity 0.5s;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5); 
+            font-weight: 500; letter-spacing: 1px;
+        }
+
+        /* ========== 返回主页按钮样式 ========== */
+        .global-back-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 300;
+            pointer-events: auto;
+            font-family: inherit;
+        }
+        .global-back-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+    <!-- 引入 Three.js 和 OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- 引入 Tween.js 用于平滑运镜 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+
+    <!-- ========== 返回主页按钮（左下角） ========== -->
+    <button id="back-to-home" class="global-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        返回知识图谱
+    </button>
+
+    <div id="canvas-container"></div>
+    <div id="ui-layer"></div>
+
+    <!-- 主标题 -->
+    <h1 id="main-title">氯碱工业</h1>
+
+    <!-- 动态解说面板 (弹窗模式) -->
+    <div id="narrative-panel">
+        <button id="close-narrative" style="float:right; border:none; background:none; font-size:18px; cursor:pointer; color:#999; margin-top:-5px; margin-right:-5px;">✖</button>
+        <h3>💡 反应过程分析</h3>
+        <div id="narrative-text">
+            电源未接通。离子在溶液中做无规则热运动。<br><br>
+            <strong>请点击下方“开始”按钮观察电解。</strong>
+        </div>
+    </div>
+
+    <!-- 离子图例 -->
+    <div id="legend-panel">
+        <div style="font-weight: bold; margin-bottom: 10px; font-size: 14px; text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 5px;">微观图例</div>
+        <div class="legend-item"><div class="color-dot" style="background-color: #888888;"></div> Na⁺ (钠离子)</div>
+        <div class="legend-item"><div class="color-dot" style="background-color: #22cc22;"></div> Cl⁻ (氯离子)</div>
+        <div class="legend-item"><div class="color-dot" style="background-color: #ffffff;"></div> H⁺ (氢离子)</div>
+        <div class="legend-item"><div class="color-dot" style="background-color: #cc2222;"></div> OH⁻ (氢氧根离子)</div>
+        <div class="legend-item"><div class="color-dot" style="background-color: #ffcc00;"></div> e⁻ (电子)</div>
+    </div>
+
+    <!-- 统一底部控制面板 -->
+    <div id="controls">
+        <button id="btn-narrative" class="control-btn btn-info">反应过程分析</button>
+        <button id="btn-view-toggle" class="control-btn btn-view">实物装置</button>
+        <button id="btn-tour" class="control-btn btn-tour">导览</button>
+        <button id="btn-start" class="control-btn">开始</button>
+        <button id="btn-fault" class="control-btn btn-fault">普通隔膜模拟</button>
+        <button id="btn-reset" class="control-btn btn-reset">重做</button>
+    </div>
+    
+    <div id="tour-subtitle">字幕将显示在这里...</div>
+
+    <!-- 微观放大镜弹窗 -->
+    <div id="magnifier-modal">
+        <button id="close-magnifier" style="float:right; border:none; background:none; font-size:18px; cursor:pointer; color:#999;">✖</button>
+        <h3 style="color:#d32f2f; margin-top:0;">🔍 离子交换膜微观机制</h3>
+        <div style="position:relative; height:150px; background:#f5f7fa; border-radius:8px; overflow:hidden; margin: 15px 0; border: 1px solid #ddd;">
+            <div style="position:absolute; left:50%; top:0; bottom:0; width:12px; background:rgba(255, 204, 0, 0.5); transform:translateX(-50%); border-left: 2px dashed #e6b800; border-right: 2px dashed #e6b800;"></div>
+            <div class="micro-ion na-ion">Na⁺</div>
+            <div class="micro-ion cl-ion">Cl⁻</div>
+            <div class="micro-ion oh-ion">OH⁻</div>
+        </div>
+        <p style="font-size:13px; color:#555; margin:0; line-height:1.6;">
+            全氟阳离子交换膜含有带负电荷的基团，<b>只允许带正电的 Na⁺ 通过</b>，排斥带负电的 Cl⁻ 和 OH⁻。这有效防止了阳极的 Cl₂ 与阴极生成的 NaOH 反应，保证了产物纯度。
+        </p>
+    </div>
+    
+    <div id="click-hint">🔍 点击交换膜查看微观</div>
+
+    <script>
+        // ========== 返回主页函数 ==========
+        function goBackHome() {
+            let currentPath = window.location.pathname;
+            let baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            let targetUrl = baseDir + 'index.html';
+            let debugDiv = document.createElement('div');
+            debugDiv.style.position = 'fixed';
+            debugDiv.style.bottom = '100px';
+            debugDiv.style.left = '10px';
+            debugDiv.style.background = 'rgba(0,0,0,0.7)';
+            debugDiv.style.color = 'white';
+            debugDiv.style.padding = '8px';
+            debugDiv.style.borderRadius = '8px';
+            debugDiv.style.zIndex = '9999';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.innerText = '返回主页: ' + targetUrl;
+            document.body.appendChild(debugDiv);
+            setTimeout(() => debugDiv.remove(), 1500);
+            window.location.href = targetUrl;
+        }
+
+        document.getElementById('back-to-home').addEventListener('click', goBackHome);
+
+        // ========== 以下为原有氯碱工业 3D 模型代码，未作任何功能改动 ==========
+        // 1. 场景基础设置
+        const container = document.getElementById('canvas-container');
+        const uiLayer = document.getElementById('ui-layer');
+        const narrativeText = document.getElementById('narrative-text');
+        
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xffffff, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setClearColor(0xffffff, 1);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 50;
+        controls.minDistance = 5;
+
+        // 2. 光照设置
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        backLight.position.set(-10, -10, -10);
+        scene.add(backLight);
+
+        // 3. 材质定义 
+        const materials = {
+            anodeLiquid: new THREE.MeshPhysicalMaterial({ color: 0x4da6ff, transmission: 0.8, opacity: 0.3, transparent: true, roughness: 0.2, metalness: 0.1 }),
+            cathodeLiquid: new THREE.MeshPhysicalMaterial({ color: 0x9933cc, transmission: 0.8, opacity: 0.3, transparent: true, roughness: 0.2, metalness: 0.1 }),
+            membrane: new THREE.MeshStandardMaterial({ color: 0xffcc00, transparent: true, opacity: 0.85, side: THREE.DoubleSide, roughness: 0.4 }),
+            electrode: new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.2 }),
+            pipe: new THREE.MeshPhysicalMaterial({ color: 0x888888, transparent: true, opacity: 0.6, roughness: 0.2, metalness: 0.1, side: THREE.DoubleSide }),
+            powerSupply: new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3 }),
+            wireAnode: new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5, metalness: 0.2 }),
+            wireCathode: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5, metalness: 0.2 }),
+        };
+
+        // 4. 构建 3D 模型
+        const tankGroup = new THREE.Group();
+        scene.add(tankGroup);
+        
+        // 微观元素编组 
+        const microGroup = new THREE.Group();
+        tankGroup.add(microGroup);
+
+        // 外壳线框
+        const boxGeo = new THREE.BoxGeometry(12, 6, 4);
+        const tankOutline = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0x555555 }));
+        tankGroup.add(tankOutline);
+        
+        // 溶液实体
+        const liquidGeo = new THREE.BoxGeometry(5.9, 5.8, 3.8);
+        const anodeLiquid = new THREE.Mesh(liquidGeo, materials.anodeLiquid);
+        anodeLiquid.position.set(-3.05, 0, 0);
+        tankGroup.add(anodeLiquid);
+
+        const cathodeLiquid = new THREE.Mesh(liquidGeo, materials.cathodeLiquid);
+        cathodeLiquid.position.set(3.05, 0, 0);
+        tankGroup.add(cathodeLiquid);
+
+        // 膜与电极
+        const membraneMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 6.2, 4.2), materials.membrane);
+        tankGroup.add(membraneMesh);
+        
+        const anode = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.5, 2), materials.electrode);
+        anode.position.set(-4, 0, 0);
+        tankGroup.add(anode);
+
+        const cathode = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.5, 2), materials.electrode);
+        cathode.position.set(4, 0, 0);
+        tankGroup.add(cathode);
+
+        // 管道
+        function createPipe(x, y, z, rotationZ) {
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.5, 16), materials.pipe);
+            pipe.position.set(x, y, z);
+            pipe.rotation.z = rotationZ;
+            tankGroup.add(pipe); 
+        }
+        createPipe(-4.5, -3.75, 0, 0); 
+        createPipe(-4.5, 3.75, 0, 0);  
+        createPipe(-6.75, 1, 0, Math.PI / 2); 
+        createPipe(4.5, -3.75, 0, 0);  
+        createPipe(4.5, 3.75, 0, 0);   
+        createPipe(6.75, 1, 0, Math.PI / 2);  
+
+        let isPlaying = false;
+        let isFaultMode = false;
+        let reactionProgress = 0;
+        const flowArrows = [];
+
+        // 箭头
+        function createDirectionArrow(x, y, z, directionStr) {
+            const arrowGroup = new THREE.Group();
+            const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 8), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+            cyl.position.y = -0.15;
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.3, 8), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+            cone.position.y = 0.25;
+            arrowGroup.add(cyl); arrowGroup.add(cone);
+            arrowGroup.position.set(x, y, z);
+            
+            if (directionStr === 'left') arrowGroup.rotation.z = Math.PI / 2;
+            else if (directionStr === 'right') arrowGroup.rotation.z = -Math.PI / 2;
+            
+            arrowGroup.userData = { origX: x, origY: y, origZ: z, directionStr };
+            arrowGroup.visible = false; 
+            flowArrows.push(arrowGroup);
+            microGroup.add(arrowGroup); 
+        }
+        createDirectionArrow(-4.5, -3.75, 0, 'up');    
+        createDirectionArrow(4.5, -3.75, 0, 'up');     
+        createDirectionArrow(-6.75, 1, 0, 'left');     
+        createDirectionArrow(6.75, 1, 0, 'right');     
+
+        // 动态电源屏幕贴图
+        const psCanvas = document.createElement('canvas');
+        psCanvas.width = 512;
+        psCanvas.height = 256;
+        const psCtx = psCanvas.getContext('2d');
+        const psTexture = new THREE.CanvasTexture(psCanvas);
+        psTexture.minFilter = THREE.LinearFilter;
+        psTexture.magFilter = THREE.LinearFilter;
+
+        function updatePowerScreen(isOn, isFault = false) {
+            psCtx.fillStyle = isOn ? (isFault ? '#330000' : '#002211') : '#111111';
+            psCtx.fillRect(0, 0, 512, 256);
+            psCtx.strokeStyle = '#000000';
+            psCtx.lineWidth = 15;
+            psCtx.strokeRect(0, 0, 512, 256);
+            
+            if (isOn) {
+                psCtx.font = 'bold 80px monospace';
+                psCtx.textAlign = 'right';
+                psCtx.shadowBlur = 15;
+                
+                psCtx.shadowColor = isFault ? '#ff0000' : '#00ff00';
+                psCtx.fillStyle = isFault ? '#ff3333' : '#33ff33';
+                psCtx.fillText('12.0 V', 480, 100);
+                
+                psCtx.shadowColor = isFault ? '#ffaa00' : '#33ccff';
+                psCtx.fillStyle = isFault ? '#ffaa00' : '#33ccff';
+                psCtx.fillText(isFault ? '85.5 A' : '50.0 A', 480, 210);
+                
+                psCtx.shadowBlur = 0;
+                
+                psCtx.beginPath();
+                psCtx.arc(50, 50, 15, 0, Math.PI * 2);
+                psCtx.fillStyle = isFault ? '#ff0000' : '#00ff00';
+                psCtx.fill();
+
+                psCtx.font = 'bold 30px sans-serif';
+                psCtx.textAlign = 'left';
+                if(isFault) {
+                    psCtx.fillStyle = '#ff0000';
+                    psCtx.fillText('FAULT', 20, 210);
+                } else {
+                    psCtx.fillStyle = '#00ff00';
+                    psCtx.fillText('C.V.', 25, 210);
+                }
+            }
+            psTexture.needsUpdate = true;
+        }
+        updatePowerScreen(false);
+
+        // 电源外壳与结构
+        const powerSupplyGroup = new THREE.Group();
+        powerSupplyGroup.position.set(0, 5.5, 0);
+        
+        const psBodyMat = new THREE.MeshStandardMaterial({ color: 0xddeeff, metalness: 0.6, roughness: 0.4 });
+        const psBody = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.8, 1.8), psBodyMat);
+        powerSupplyGroup.add(psBody);
+        
+        const psDecal = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.2, 1.9), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+        psDecal.position.set(0, -0.6, 0);
+        powerSupplyGroup.add(psDecal);
+
+        const screenMat = new THREE.MeshBasicMaterial({ map: psTexture });
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.9), screenMat);
+        screen.position.set(-0.4, 0.2, 0.91); 
+        powerSupplyGroup.add(screen);
+
+        const knobGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.2, 16);
+        const knobMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.8, roughness: 0.2 });
+        const knob1 = new THREE.Mesh(knobGeo, knobMat);
+        knob1.rotation.x = Math.PI / 2;
+        knob1.position.set(1.0, 0.4, 0.91);
+        powerSupplyGroup.add(knob1);
+        
+        const knob2 = new THREE.Mesh(knobGeo, knobMat);
+        knob2.rotation.x = Math.PI / 2;
+        knob2.position.set(1.0, -0.1, 0.91);
+        powerSupplyGroup.add(knob2);
+
+        const terminalGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.3, 16);
+        const terminalRed = new THREE.Mesh(terminalGeo, new THREE.MeshStandardMaterial({ color: 0xcc0000, metalness: 0.5, roughness: 0.3 }));
+        terminalRed.rotation.x = Math.PI / 2;
+        terminalRed.position.set(-1.0, -0.6, 0.95);
+        powerSupplyGroup.add(terminalRed);
+        
+        const terminalBlack = new THREE.Mesh(terminalGeo, new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.5, roughness: 0.3 }));
+        terminalBlack.rotation.x = Math.PI / 2;
+        terminalBlack.position.set(1.0, -0.6, 0.95);
+        powerSupplyGroup.add(terminalBlack);
+
+        tankGroup.add(powerSupplyGroup);
+
+        const curveAnode = new THREE.CubicBezierCurve3(
+            new THREE.Vector3(-4, 2.25, 0),        
+            new THREE.Vector3(-4, 4, 0),
+            new THREE.Vector3(-2, 4.9, 0.95),
+            new THREE.Vector3(-1, 4.9, 0.95)       
+        );
+        tankGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curveAnode, 20, 0.06, 12, false), materials.wireAnode));
+
+        const curveCathode = new THREE.CubicBezierCurve3(
+            new THREE.Vector3(1, 4.9, 0.95),       
+            new THREE.Vector3(2, 4.9, 0.95),
+            new THREE.Vector3(4, 4, 0),
+            new THREE.Vector3(4, 2.25, 0)          
+        );
+        tankGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curveCathode, 20, 0.06, 12, false), materials.wireCathode));
+
+        const electronParticles = [];
+        const electronMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 }); 
+        function createElectron(curve) {
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), electronMat);
+            microGroup.add(mesh); 
+            electronParticles.push({ mesh, curve, progress: Math.random() });
+        }
+        for(let i=0; i<4; i++) { createElectron(curveAnode); createElectron(curveCathode); }
+        electronParticles.forEach(e => e.mesh.visible = false);
+
+        // 5. 粒子系统
+        const particles = [];
+        function createParticle(color, radius, startPos, type) {
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), new THREE.MeshPhongMaterial({ color: color, shininess: 100 }));
+            mesh.position.copy(startPos);
+            if (type === 'cl2_gas' || type === 'h2_gas') mesh.visible = false;
+            microGroup.add(mesh); 
+            
+            const pData = { mesh, type, originalPos: startPos.clone() };
+            
+            if (type === 'na_ion') {
+                pData.speed = 0.2 + Math.random() * 0.4; 
+                pData.delay = Math.random() * 3;         
+                pData.activeTime = 0;                    
+                pData.curveY = (Math.random() - 0.5) * 2; 
+                pData.curveZ = (Math.random() - 0.5) * 2; 
+                pData.progress = 0;                      
+            } else if (type === 'cl_ion' || type === 'h_ion' || type === 'oh_ion') {
+                pData.speed = 0.5 + Math.random() * 0.5; 
+            }
+            particles.push(pData);
+        }
+
+        const particleCount = 20;
+        for (let i = 0; i < particleCount; i++) {
+            createParticle(0x66ff66, 0.15, new THREE.Vector3(-4.5 + (Math.random()-0.5)*0.4, 2 + Math.random()*2, (Math.random()-0.5)*0.6), 'cl2_gas');
+            createParticle(0xccffff, 0.15, new THREE.Vector3(4.5 + (Math.random()-0.5)*0.4, 2 + Math.random()*2, (Math.random()-0.5)*0.6), 'h2_gas');
+            createParticle(0x888888, 0.2, new THREE.Vector3(-3.5 + Math.random()*1.5, (Math.random()-0.5)*4, (Math.random()-0.5)*2), 'na_ion');
+            createParticle(0x22cc22, 0.2, new THREE.Vector3(-3 - Math.random()*2, (Math.random()-0.5)*4, (Math.random()-0.5)*2), 'cl_ion');
+            createParticle(0xcc2222, 0.2, new THREE.Vector3(3 + Math.random()*2, (Math.random()-0.5)*4, (Math.random()-0.5)*2), 'oh_ion');
+            createParticle(0xffffff, 0.1, new THREE.Vector3(2.5 + Math.random()*2, (Math.random()-0.5)*4, (Math.random()-0.5)*2), 'h_ion');
+        }
+
+        // 6. 3D 标签系统
+        const labels = [];
+        function createLabel(title, reaction, x, y, z) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.innerHTML = (title ? `<div class="label-title">${title}</div>` : '') + 
+                            (reaction ? `<div class="label-reaction">${reaction}</div>` : '');
+            uiLayer.appendChild(div);
+            labels.push({ element: div, position: new THREE.Vector3(x, y, z) });
+        }
+
+        createLabel("高纯氯气 (Cl₂)", "", -4.5, 5, 0);
+        createLabel("高纯氢气 (H₂)", "", 4.5, 5, 0);
+        createLabel("浓NaCl", "", -4.5, -5, 0);
+        createLabel("纯水 (含少量 NaOH)", "", 4.5, -5, 0);
+        createLabel("淡盐水", "", -7.5, 2.5, 0);
+        createLabel("高纯烧碱溶液 (32%)", "", 7.5, 2.5, 0);
+        createLabel("阳离子交换膜", "", 0, -3.5, 2.5);
+        
+        createLabel("阳极区", "2Cl⁻ - 2e⁻ = Cl₂↑", -5, 0, 2.5);
+        createLabel("阴极区", "2H₂O + 2e⁻ = H₂↑ + 2OH⁻", 5, 0, 2.5);
+
+        // --- 交互系统状态 ---
+        let isTouring = false;
+        let isConcreteView = false;
+        let isNarrativeOpen = false;
+        const defaultCameraPos = new THREE.Vector3(0, 5, 20);
+        const defaultTarget = new THREE.Vector3(0, 0, 0);
+
+        // --- UI 控制按钮交互逻辑 ---
+        
+        // 1. 修复：反应过程分析面板切换逻辑
+        const btnNarrative = document.getElementById('btn-narrative');
+        const narrativePanel = document.getElementById('narrative-panel');
+        
+        function toggleNarrative(forceState = null) {
+            isNarrativeOpen = forceState !== null ? forceState : !isNarrativeOpen;
+            
+            if (isNarrativeOpen) {
+                // 打开时，先强制将 display 设为 block（覆盖隐藏的 inline 样式）
+                narrativePanel.style.display = 'block';
+                // 使用 requestAnimationFrame 确保 display:block 渲染完成后再添加动画类
+                requestAnimationFrame(() => {
+                    narrativePanel.classList.add('show');
+                });
+                btnNarrative.classList.add('active');
+            } else {
+                narrativePanel.classList.remove('show');
+                btnNarrative.classList.remove('active');
+                // 等待淡出动画结束再将其设为 display none
+                setTimeout(() => { 
+                    if(!isNarrativeOpen) {
+                        narrativePanel.style.display = 'none'; 
+                    }
+                }, 300);
+            }
+        }
+        
+        btnNarrative.addEventListener('click', () => toggleNarrative());
+        document.getElementById('close-narrative').addEventListener('click', () => toggleNarrative(false));
+
+        // 2. 抽象与实物视图切换
+        document.getElementById('btn-view-toggle').addEventListener('click', () => {
+            isConcreteView = !isConcreteView;
+            const btn = document.getElementById('btn-view-toggle');
+            
+            if (isConcreteView) {
+                btn.innerHTML = "抽象原理";
+                btn.classList.add('concrete-active');
+                
+                materials.anodeLiquid.transmission = 0; materials.anodeLiquid.opacity = 1; materials.anodeLiquid.transparent = false;
+                materials.anodeLiquid.color.setHex(0x546e7a); materials.anodeLiquid.metalness = 0.5; materials.anodeLiquid.roughness = 0.4;
+                
+                materials.cathodeLiquid.transmission = 0; materials.cathodeLiquid.opacity = 1; materials.cathodeLiquid.transparent = false;
+                materials.cathodeLiquid.color.setHex(0x607d8b); materials.cathodeLiquid.metalness = 0.5; materials.cathodeLiquid.roughness = 0.4;
+                
+                materials.membrane.transparent = false; materials.membrane.opacity = 1; materials.membrane.color.setHex(0x222222); 
+                materials.pipe.transparent = false; materials.pipe.opacity = 1; materials.pipe.metalness = 0.6; materials.pipe.roughness = 0.4;
+                
+                microGroup.visible = false; tankOutline.visible = false;
+                document.getElementById('legend-panel').style.opacity = '0'; document.getElementById('legend-panel').style.pointerEvents = 'none';
+                document.getElementById('magnifier-modal').style.display = 'none'; document.getElementById('click-hint').style.display = 'none';
+                toggleNarrative(false); 
+                
+                labels.forEach(l => { if(l.element.innerHTML.includes('label-reaction')) l.element.style.display = 'none'; });
+            } else {
+                btn.innerHTML = "实物装置";
+                btn.classList.remove('concrete-active');
+                
+                materials.anodeLiquid.transmission = 0.8; materials.anodeLiquid.opacity = 0.3; materials.anodeLiquid.transparent = true; materials.anodeLiquid.metalness = 0.1;
+                materials.cathodeLiquid.transmission = 0.8; materials.cathodeLiquid.opacity = 0.3; materials.cathodeLiquid.transparent = true; materials.cathodeLiquid.metalness = 0.1;
+                
+                materials.membrane.transparent = true; materials.membrane.opacity = 0.85;
+                materials.pipe.transparent = true; materials.pipe.opacity = 0.6; materials.pipe.metalness = 0.1;
+                
+                if (isFaultMode) { materials.membrane.color.setHex(0xaaaaaa); materials.membrane.opacity = 0.5; } 
+                else { materials.membrane.color.setHex(0xffcc00); }
+                
+                microGroup.visible = true; tankOutline.visible = true;
+                document.getElementById('legend-panel').style.opacity = '1'; document.getElementById('legend-panel').style.pointerEvents = 'auto';
+                
+                labels.forEach(l => { if(l.element.innerHTML.includes('label-reaction')) l.element.style.display = 'block'; });
+            }
+            Object.values(materials).forEach(mat => mat.needsUpdate = true);
+        });
+
+        const startText = `
+            <span class="highlight-step">1. 电子回路导通：</span><br>外加电场作用下，电解开始。<br><br>
+            <span class="highlight-step">2. 离子定向移动：</span><br>
+            • <b>Cl⁻</b> 移向阳极失电子产生 <b>Cl₂</b> 气泡。<br>
+            • <b>H⁺</b> 移向阴极得电子产生 <b>H₂</b> 气泡。<br><br>
+            <span class="highlight-step">3. 交换膜的作用：</span><br>
+            只允许 <b>Na⁺</b> 穿透到达阴极区，与富集的 <b>OH⁻</b> 形成高纯度 <b>NaOH</b>。
+        `;
+
+        const faultText = `
+            <span class="highlight-step" style="color:#f57c00;">⚠️ 故障模拟 (普通隔膜)：</span><br>
+            <span style="color:#d32f2f; font-weight:bold;">失去了离子选择性！</span><br><br>
+            1. <b>OH⁻</b> 向阳极移动，与 <b>Cl₂</b> 发生副反应生成次氯酸钠，导致烧碱不纯。<br>
+            2. <b>H₂</b> 和 <b>Cl₂</b> 混合可能引起爆炸！
+        `;
+
+        document.getElementById('btn-start').addEventListener('click', () => {
+            isPlaying = true; isFaultMode = false;
+            document.getElementById('btn-start').disabled = true; document.getElementById('btn-fault').disabled = true;
+            narrativeText.innerHTML = startText;
+            if(!isNarrativeOpen && !isConcreteView) toggleNarrative(true); 
+            
+            updatePowerScreen(true, false); 
+            flowArrows.forEach(arrow => arrow.visible = true);
+            electronParticles.forEach(e => e.mesh.visible = true);
+            particles.forEach(p => { if (p.type === 'cl2_gas' || p.type === 'h2_gas') p.mesh.visible = true; });
+        });
+
+        document.getElementById('btn-fault').addEventListener('click', () => {
+            isPlaying = true; isFaultMode = true; reactionProgress = 0; 
+            if (isConcreteView) document.getElementById('btn-view-toggle').click();
+            
+            document.getElementById('btn-start').disabled = true; document.getElementById('btn-fault').disabled = true;
+            narrativeText.innerHTML = faultText;
+            if(!isNarrativeOpen) toggleNarrative(true);
+            
+            updatePowerScreen(true, true); 
+            materials.membrane.color.setHex(0xaaaaaa); materials.membrane.opacity = 0.5;
+            
+            flowArrows.forEach(arrow => arrow.visible = true);
+            electronParticles.forEach(e => e.mesh.visible = true);
+            particles.forEach(p => { if (p.type === 'cl2_gas' || p.type === 'h2_gas') p.mesh.visible = true; });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            isPlaying = false; isFaultMode = false; reactionProgress = 0;
+            document.getElementById('btn-start').disabled = false; document.getElementById('btn-fault').disabled = false;
+            narrativeText.innerHTML = "电源已断开。离子在溶液中做无规则热运动。<br><br><strong>请点击下方“开始”按钮观察电解。</strong>"; 
+            
+            updatePowerScreen(false, false); 
+            
+            materials.membrane.color.setHex(0xffcc00); materials.membrane.opacity = 0.85;
+            materials.anodeLiquid.color.setHex(0x4da6ff); materials.anodeLiquid.opacity = 0.3;
+            materials.cathodeLiquid.color.setHex(0x9933cc); materials.cathodeLiquid.opacity = 0.3;
+
+            flowArrows.forEach(arrow => { arrow.visible = false; arrow.position.set(arrow.userData.origX, arrow.userData.origY, arrow.userData.origZ); });
+            electronParticles.forEach(e => { e.mesh.visible = false; e.progress = Math.random(); });
+            particles.forEach(p => {
+                if (p.type === 'cl2_gas' || p.type === 'h2_gas') { p.mesh.visible = false; p.mesh.position.y = p.originalPos.y; }
+                if (p.type === 'na_ion') { p.progress = 0; p.activeTime = 0; p.mesh.position.copy(p.originalPos); }
+                if (p.type === 'cl_ion' || p.type === 'h_ion' || p.type === 'oh_ion') { p.mesh.position.copy(p.originalPos); }
+            });
+        });
+
+        // --- 沉浸式智能导览系统 ---
+        document.getElementById('btn-tour').addEventListener('click', () => {
+            if (isTouring) return;
+            isTouring = true;
+            
+            if (isConcreteView) document.getElementById('btn-view-toggle').click();
+            toggleNarrative(false); 
+            
+            // 导览期间完全隐藏底部控制面板，避免遮挡底部字幕
+            document.getElementById('controls').style.opacity = '0';
+            document.getElementById('controls').style.pointerEvents = 'none';
+            document.getElementById('magnifier-modal').style.display = 'none';
+            controls.enabled = false; 
+            document.getElementById('btn-reset').click(); 
+            
+            const subtitle = document.getElementById('tour-subtitle');
+            subtitle.style.display = 'block'; subtitle.style.opacity = '1';
+
+            const tourSteps = [
+                {
+                    pos: new THREE.Vector3(0, 8, 28), target: new THREE.Vector3(0, 0, 0),
+                    text: "欢迎来到氯碱工业 3D 数字实验室。首先，映入眼帘的是真实的【实物装置】。",
+                    duration: 2500, wait: 2500,
+                    action: () => { if (!isConcreteView) document.getElementById('btn-view-toggle').click(); }
+                },
+                {
+                    pos: new THREE.Vector3(0, 5, 18), target: new THREE.Vector3(0, 0, 0),
+                    text: "让我们开启“透视眼”剥离外壳，深入【抽象原理】微观世界！",
+                    duration: 2500, wait: 2500,
+                    action: () => { if (isConcreteView) document.getElementById('btn-view-toggle').click(); }
+                },
+                {
+                    pos: new THREE.Vector3(0, 7, 7), target: new THREE.Vector3(0, 5, 0),
+                    text: "接通顶部的直流电源。强大的电场将为整个电解反应提供驱动力。",
+                    duration: 2500, wait: 2000,
+                    action: () => document.getElementById('btn-start').click() 
+                },
+                {
+                    pos: new THREE.Vector3(-6, 2, 8), target: new THREE.Vector3(-4, 0, 0),
+                    text: "在左侧阳极区，浓盐水中的氯离子(Cl⁻)失去电子，生成高纯氯气(Cl₂)。",
+                    duration: 3000, wait: 3500
+                },
+                {
+                    pos: new THREE.Vector3(6, 2, 8), target: new THREE.Vector3(4, 0, 0),
+                    text: "在右侧阴极区，水电离出的氢离子(H⁺)得到电子，生成高纯氢气(H₂)。",
+                    duration: 3000, wait: 3500
+                },
+                {
+                    pos: new THREE.Vector3(0, -1, 7), target: new THREE.Vector3(0, 0, 0),
+                    text: "工艺的核心在这里：阳离子交换膜！它像一道智能城门，只允许钠离子(Na⁺)向右穿透。",
+                    duration: 3000, wait: 4000
+                },
+                {
+                    pos: new THREE.Vector3(7, -2, 10), target: new THREE.Vector3(5, -2, 0),
+                    text: "穿透过来的钠离子(Na⁺)与阴极区富集的氢氧根(OH⁻)结合，流出高纯烧碱(NaOH)。",
+                    duration: 3000, wait: 4000
+                },
+                {
+                    pos: new THREE.Vector3(0, 5, 25), target: new THREE.Vector3(0, 0, 0),
+                    text: "最后，让我们强制触发【普通多孔隔膜的故障模拟】...",
+                    duration: 2500, wait: 1500,
+                    action: () => { document.getElementById('btn-fault').click(); }
+                },
+                {
+                    pos: new THREE.Vector3(0, 2, 18), target: new THREE.Vector3(0, 0, 0),
+                    text: "失去离子选择性后，氢氧根(OH⁻)逆向游走引发副反应，这就是离子膜的绝对必要性。",
+                    duration: 3500, wait: 4500
+                },
+                {
+                    pos: defaultCameraPos, target: defaultTarget,
+                    text: "导览结束。知识就是力量，现在您可以自由探索整个数字实验室了！",
+                    duration: 3000, wait: 3000,
+                    action: () => {
+                        document.getElementById('btn-reset').click();
+                        if (isConcreteView) document.getElementById('btn-view-toggle').click();
+                    }
+                }
+            ];
+
+            let currentStep = 0;
+            function nextStep() {
+                if (currentStep >= tourSteps.length) {
+                    isTouring = false;
+                    // 导览结束，恢复控制面板显示
+                    document.getElementById('controls').style.opacity = '1';
+                    document.getElementById('controls').style.pointerEvents = 'auto';
+                    controls.enabled = true;
+                    subtitle.style.opacity = '0';
+                    setTimeout(() => subtitle.style.display = 'none', 500);
+                    return;
+                }
+                const step = tourSteps[currentStep];
+                subtitle.innerHTML = step.text;
+                if (step.action) step.action();
+
+                new TWEEN.Tween(camera.position).to({ x: step.pos.x, y: step.pos.y, z: step.pos.z }, step.duration).easing(TWEEN.Easing.Cubic.InOut).start();
+                new TWEEN.Tween(controls.target).to({ x: step.target.x, y: step.target.y, z: step.target.z }, step.duration).easing(TWEEN.Easing.Cubic.InOut)
+                    .onComplete(() => { setTimeout(nextStep, step.wait); }).start();
+                currentStep++;
+            }
+            nextStep(); 
+        });
+
+        // --- 交互：3D 射线拾取微观放大镜 ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const clickHint = document.getElementById('click-hint');
+
+        window.addEventListener('mousemove', (event) => {
+            if (isTouring || isConcreteView) return; 
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(membraneMesh);
+            
+            if (intersects.length > 0) {
+                document.body.style.cursor = 'pointer';
+                clickHint.style.display = 'block';
+                clickHint.style.left = event.clientX + 'px';
+                clickHint.style.top = event.clientY + 'px';
+            } else {
+                document.body.style.cursor = 'default';
+                clickHint.style.display = 'none';
+            }
+        });
+
+        window.addEventListener('click', (event) => {
+            if (isTouring || isConcreteView) return; 
+            if (event.target.closest('#controls') || event.target.closest('#narrative-panel') || event.target.closest('#legend-panel') || event.target.closest('#magnifier-modal')) return;
+            
+            raycaster.setFromCamera(mouse, camera);
+            if (raycaster.intersectObject(membraneMesh).length > 0) {
+                document.getElementById('magnifier-modal').style.display = 'block';
+            }
+        });
+
+        document.getElementById('close-magnifier').addEventListener('click', () => {
+            document.getElementById('magnifier-modal').style.display = 'none';
+        });
+
+        function updateLabels() {
+            const vector = new THREE.Vector3();
+            labels.forEach(label => {
+                vector.copy(label.position);
+                vector.project(camera);
+                if (vector.z > 1) { label.element.style.opacity = '0'; return; }
+                const x = (vector.x * .5 + .5) * window.innerWidth;
+                const y = (vector.y * -.5 + .5) * window.innerHeight;
+                label.element.style.left = `${x}px`;
+                label.element.style.top = `${y}px`;
+                label.element.style.opacity = '1';
+            });
+        }
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            
+            TWEEN.update();
+            controls.update();
+
+            if (isPlaying) {
+                reactionProgress += delta * 0.05; 
+                if (reactionProgress > 1) reactionProgress = 1;
+                
+                if (!isConcreteView) {
+                    if (!isFaultMode) {
+                        materials.anodeLiquid.color.lerpColors(new THREE.Color(0x4da6ff), new THREE.Color(0xccffff), reactionProgress * 0.1);
+                        materials.cathodeLiquid.color.lerpColors(new THREE.Color(0x9933cc), new THREE.Color(0x5e1b82), reactionProgress * 0.1);
+                        materials.cathodeLiquid.opacity = 0.3 + (reactionProgress * 0.5); 
+                    } else {
+                        materials.anodeLiquid.color.lerpColors(new THREE.Color(0x4da6ff), new THREE.Color(0x99cc33), reactionProgress * 0.1);
+                    }
+                }
+
+                const time = Date.now() * 0.005;
+                flowArrows.forEach(arrow => {
+                    if(arrow.userData.directionStr === 'up') arrow.position.y = arrow.userData.origY + Math.sin(time) * 0.1;
+                    else if (arrow.userData.directionStr === 'left') arrow.position.x = arrow.userData.origX - Math.sin(time) * 0.1;
+                    else if (arrow.userData.directionStr === 'right') arrow.position.x = arrow.userData.origX + Math.sin(time) * 0.1;
+                });
+            }
+
+            electronParticles.forEach(e => {
+                if (isPlaying) {
+                    e.progress += delta * 0.4;
+                    if (e.progress > 1) e.progress = 0;
+                    e.mesh.position.copy(e.curve.getPointAt(e.progress));
+                }
+            });
+
+            particles.forEach(p => {
+                const floatOffset = Math.sin(Date.now() * 0.002 + p.originalPos.x) * 0.1; 
+
+                if (p.type === 'cl2_gas' || p.type === 'h2_gas') {
+                    if (isPlaying) {
+                        p.mesh.position.y += delta * 1.5;
+                        if (p.mesh.position.y > 4.5) p.mesh.position.y = 1.5; 
+                    }
+                } else if (p.type === 'na_ion') {
+                    if (isPlaying) {
+                        p.activeTime += delta;
+                        if (p.activeTime > p.delay) {
+                            p.progress += delta * p.speed;
+                            if (p.progress > 1) {
+                                p.progress = 0; p.activeTime = 0; p.mesh.position.copy(p.originalPos);
+                            } else {
+                                const targetX = 3.5;
+                                p.mesh.position.x = p.originalPos.x + (p.progress * (targetX - p.originalPos.x));
+                                p.mesh.position.y = p.originalPos.y + Math.sin(p.progress * Math.PI) * p.curveY;
+                                p.mesh.position.z = p.originalPos.z + Math.sin(p.progress * Math.PI) * p.curveZ;
+                            }
+                        } else {
+                            p.mesh.position.y = p.originalPos.y + floatOffset;
+                        }
+                    } else {
+                        p.mesh.position.y = p.originalPos.y + floatOffset;
+                    }
+                } else if (p.type === 'cl_ion' || p.type === 'h_ion') {
+                    if (isPlaying) {
+                        p.mesh.position.x += (p.type === 'cl_ion' ? -1 : 1) * delta * p.speed;
+                        if (p.type === 'cl_ion' && p.mesh.position.x < -4.0) p.mesh.position.x = -1.5 + Math.random();
+                        if (p.type === 'h_ion' && p.mesh.position.x > 4.0) p.mesh.position.x = 1.5 - Math.random();
+                    }
+                    p.mesh.position.y = p.originalPos.y + floatOffset;
+                } else if (p.type === 'oh_ion') {
+                    if (isPlaying && isFaultMode) {
+                        p.mesh.position.x -= delta * p.speed;
+                        if (p.mesh.position.x < -4.0) p.mesh.position.x = 3.5; 
+                    } else {
+                        p.mesh.position.y = p.originalPos.y + floatOffset;
+                    }
+                }
+            });
+
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, false);
+
+        animate();
+    </script>
+</body>
+</html>
