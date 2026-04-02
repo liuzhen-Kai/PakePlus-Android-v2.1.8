@@ -1,11 +1,1011 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>内能的几种形式</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #0f172a; 
+            overflow: hidden; 
+            user-select: none; 
+            -webkit-user-select: none;
+            -webkit-touch-callout: none; 
+            overscroll-behavior-y: none; 
+        }
+        ::-webkit-scrollbar { 
+            width: 0px; 
+            height: 0px; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            margin-top: -7px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // === 核心数据 ===
+        const energyConcepts = [
+          {
+            id: 'translational',
+            titleZh: '分子平动能',
+            titleEn: 'Translational Energy',
+            description: '水分子在空间中整体移动（质心平移）所具有的动能。它具有 3 个平动自由度 (x, y, z)。在水蒸气中，水分子的平动非常剧烈。它是宏观上感知到的“温度”的最直接体现。',
+            formula: <>E<sub>k</sub> = ½mv<sup>2</sup> &nbsp;&nbsp;(平均: E = 3/2 kT)</>,
+            magnitude: '~ 0.025 eV',
+            color: 'text-blue-400',
+            bg: 'bg-blue-900/20',
+            border: 'border-blue-500'
+          },
+          {
+            id: 'rotational',
+            titleZh: '分子转动能',
+            titleEn: 'Rotational Energy',
+            description: '水分子是一个“非线性三原子分子”，这意味着它在三维空间中有 3 个不同的转动惯量轴。它不像双原子分子那样简单旋转，而是会在空间中进行复杂的三维翻滚。常温下转动能已被充分激发。',
+            formula: <>E<sub>r</sub> = ½I<sub>x</sub>ω<sub>x</sub><sup>2</sup> + ½I<sub>y</sub>ω<sub>y</sub><sup>2</sup> + ½I<sub>z</sub>ω<sub>z</sub><sup>2</sup></>,
+            magnitude: '~ 0.001 eV (微波区)',
+            color: 'text-purple-400',
+            bg: 'bg-purple-900/20',
+            border: 'border-purple-500'
+          },
+          {
+            id: 'vibrational',
+            titleZh: '分子振动能',
+            titleEn: 'Vibrational Energy',
+            description: '水分子内部的原子并非静止。根据 3N-6 规则，H₂O 具有 3 种基本的振动模式：对称伸缩、不对称伸缩和弯曲（剪式）振动。水分子会吸收特定波长的红外线来激发这些振动，导致温室效应。',
+            formula: <>E<sub>v</sub> = Σ (v<sub>i</sub> + ½)hν<sub>i</sub> &nbsp;(i=1,2,3)</>,
+            magnitude: '~ 0.1 - 0.5 eV (红外区)',
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-900/20',
+            border: 'border-emerald-500'
+          },
+          {
+            id: 'electronic',
+            titleZh: '电子能',
+            titleEn: 'Electronic Energy',
+            description: '电子不再是绕圈的小球，而是形成弥散的“电子云”（分子轨道）。当水分子吸收高能光子（如紫外线）时，电子会从“最高占据轨道”(HOMO) 跃迁到“最低未占轨道”(LUMO)。这种分布突变会导致光解。',
+            formula: <>ΔE = E<sub>LUMO</sub> - E<sub>HOMO</sub> = hν</>,
+            magnitude: '~ 1 - 10 eV (可见/紫外)',
+            thermoNote: '常温下不发生化学反应，深层电子能常作为常数（零点能）处理，不计入内能变化。',
+            color: 'text-amber-400',
+            bg: 'bg-amber-900/20',
+            border: 'border-amber-500'
+          },
+          {
+            id: 'nuclear',
+            titleZh: '核能',
+            titleEn: 'Nuclear Energy',
+            description: '原子的核心。水分子中心是一个氧原子核（8质子+8中子）以及两个氢原子核（单质子）。强核力将它们锁紧，日常的化学反应、煮沸、电解等都绝对无法触及这部分巨大的势能。',
+            formula: <>E = mc<sup>2</sup></>,
+            magnitude: '~ 10⁶ - 10⁹ eV (MeV-GeV)',
+            thermoNote: '核能极其巨大且在常规过程中不变，因此在传统热力学讨论内能时视作零点基准。',
+            color: 'text-rose-400',
+            bg: 'bg-rose-900/20',
+            border: 'border-rose-500'
+          },
+          {
+            id: 'intermolecular',
+            titleZh: '分子间势能',
+            titleEn: 'Intermolecular Potential',
+            description: '水分子极性很强，且氧原子带有孤对电子。这使得水分子之间除了范德华力外，还能形成强大的“氢键 (O-H...O)”。正是氢键赋予了水超高的沸点、表面张力以及“冰比水轻”的反常特性。',
+            formula: <>V(r) = 4ε [(σ/r)<sup>12</sup> - (σ/r)<sup>6</sup>] + V<sub>氢键</sub></>,
+            magnitude: '~ 0.1 - 0.3 eV (决定相态)',
+            color: 'text-cyan-400',
+            bg: 'bg-cyan-900/20',
+            border: 'border-cyan-500'
+          }
+        ];
+
+        const getPos = (e) => ({
+          x: e.clientX !== undefined ? e.clientX : e.touches[0].clientX,
+          y: e.clientY !== undefined ? e.clientY : e.touches[0].clientY
+        });
+
+        // === 3D 渲染组件群 ===
+
+        // 1. 平动能 (新增模式选择与双指缩放)
+        const TranslationalVis = ({ temperature }) => {
+          const canvasRef = useRef(null);
+          const [mode, setMode] = useState('all');
+          const modeRef = useRef(mode);
+          const angleXRef = useRef(0.2);
+          const angleYRef = useRef(0.5);
+          const zoomRef = useRef(250);
+          const isDragging = useRef(false);
+          const lastMousePos = useRef({ x: 0, y: 0 });
+          const lastPinchDist = useRef(null);
+          const tempRef = useRef(temperature);
+
+          useEffect(() => { tempRef.current = temperature; }, [temperature]);
+          useEffect(() => { modeRef.current = mode; }, [mode]);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const handleWheel = (e) => {
+              e.preventDefault();
+              zoomRef.current += e.deltaY * 0.5;
+              zoomRef.current = Math.max(100, Math.min(800, zoomRef.current));
+            };
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+          }, []);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationId;
+            const boxSize = 100;
+            const W = 400; const H = 300; 
+
+            const particles = Array.from({ length: 15 }).map(() => ({
+              x: (Math.random() - 0.5) * boxSize * 1.8, y: (Math.random() - 0.5) * boxSize * 1.8, z: (Math.random() - 0.5) * boxSize * 1.8,
+              vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, vz: (Math.random() - 0.5) * 4, size: 7
+            }));
+
+            const project = (x, y, z, angleX, angleY, distance) => {
+              let y1 = y * Math.cos(angleX) - z * Math.sin(angleX);
+              let z1 = y * Math.sin(angleX) + z * Math.cos(angleX);
+              let x2 = x * Math.cos(angleY) + z1 * Math.sin(angleY);
+              let z2 = -x * Math.sin(angleY) + z1 * Math.cos(angleY);
+              const fov = 350; const scale = fov / (fov + z2 + distance);
+              return { px: W / 2 + x2 * scale, py: H / 2 - y1 * scale, scale, depth: z2 };
+            };
+
+            const drawLine3D = (p1, p2, color, angleX, angleY, distance, lineWidth = 1) => {
+              const proj1 = project(p1.x, p1.y, p1.z, angleX, angleY, distance);
+              const proj2 = project(p2.x, p2.y, p2.z, angleX, angleY, distance);
+              ctx.beginPath(); ctx.moveTo(proj1.px, proj1.py); ctx.lineTo(proj2.px, proj2.py);
+              ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.stroke();
+            };
+
+            const render = () => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = '#0f172a'; 
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.save(); ctx.scale(3, 3);
+
+              const angleX = angleXRef.current; const angleY = angleYRef.current; const distance = zoomRef.current;
+              const speedFactor = Math.sqrt(Math.max(0.1, tempRef.current) / 300);
+              const axisLen = boxSize * 1.5;
+              const currentMode = modeRef.current;
+              
+              drawLine3D({x: -axisLen, y: 0, z: 0}, {x: 0, y: 0, z: 0}, 'rgba(239, 68, 68, 0.2)', angleX, angleY, distance, 1);
+              drawLine3D({x: 0, y: 0, z: 0}, {x: axisLen, y: 0, z: 0}, 'rgba(239, 68, 68, 0.9)', angleX, angleY, distance, 2.5);
+              drawLine3D({x: 0, y: -axisLen, z: 0}, {x: 0, y: 0, z: 0}, 'rgba(34, 197, 94, 0.2)', angleX, angleY, distance, 1);
+              drawLine3D({x: 0, y: 0, z: 0}, {x: 0, y: axisLen, z: 0}, 'rgba(34, 197, 94, 0.9)', angleX, angleY, distance, 2.5);
+              drawLine3D({x: 0, y: 0, z: -axisLen}, {x: 0, y: 0, z: 0}, 'rgba(59, 130, 246, 0.2)', angleX, angleY, distance, 1);
+              drawLine3D({x: 0, y: 0, z: 0}, {x: 0, y: 0, z: axisLen}, 'rgba(59, 130, 246, 0.9)', angleX, angleY, distance, 2.5);
+
+              ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              const textX = project(axisLen + 20, 0, 0, angleX, angleY, distance);
+              const textY = project(0, axisLen + 20, 0, angleX, angleY, distance);
+              const textZ = project(0, 0, axisLen + 20, angleX, angleY, distance);
+              ctx.fillStyle = '#ef4444'; ctx.fillText('+X', textX.px, textX.py);
+              ctx.fillStyle = '#22c55e'; ctx.fillText('+Y', textY.px, textY.py);
+              ctx.fillStyle = '#3b82f6'; ctx.fillText('+Z', textZ.px, textZ.py);
+
+              const corners = [
+                {x: -boxSize, y: -boxSize, z: -boxSize}, {x: boxSize, y: -boxSize, z: -boxSize}, {x: boxSize, y: boxSize, z: -boxSize}, {x: -boxSize, y: boxSize, z: -boxSize},
+                {x: -boxSize, y: -boxSize, z: boxSize}, {x: boxSize, y: -boxSize, z: boxSize}, {x: boxSize, y: boxSize, z: boxSize}, {x: -boxSize, y: boxSize, z: boxSize}
+              ];
+              const boxColor = 'rgba(148, 163, 184, 0.15)';
+              for(let i=0; i<4; i++) {
+                drawLine3D(corners[i], corners[(i+1)%4], boxColor, angleX, angleY, distance);
+                drawLine3D(corners[i+4], corners[(i+1)%4 + 4], boxColor, angleX, angleY, distance);
+                drawLine3D(corners[i], corners[i+4], boxColor, angleX, angleY, distance);
+              }
+
+              let renderItems = [];
+              particles.forEach(p => {
+                let actVx = p.vx, actVy = p.vy, actVz = p.vz;
+                if (currentMode === 'x') { actVy = 0; actVz = 0; }
+                else if (currentMode === 'y') { actVx = 0; actVz = 0; }
+                else if (currentMode === 'z') { actVx = 0; actVy = 0; }
+
+                p.x += actVx * speedFactor; p.y += actVy * speedFactor; p.z += actVz * speedFactor;
+                
+                if (p.x < -boxSize || p.x > boxSize) p.vx *= -1;
+                if (p.y < -boxSize || p.y > boxSize) p.vy *= -1;
+                if (p.z < -boxSize || p.z > boxSize) p.vz *= -1;
+                
+                renderItems.push({ ...p, actVx, actVy, actVz, proj: project(p.x, p.y, p.z, angleX, angleY, distance) });
+              });
+
+              renderItems.sort((a, b) => b.proj.depth - a.proj.depth);
+
+              renderItems.forEach(p => {
+                const { px, py, scale } = p.proj; const r = p.size * scale; const vScale = 6;
+                drawLine3D({x: p.x, y: p.y, z: p.z}, {x: p.x + p.actVx * speedFactor * vScale, y: p.y + p.actVy * speedFactor * vScale, z: p.z + p.actVz * speedFactor * vScale}, 'rgba(255, 255, 255, 0.8)', angleX, angleY, distance, 1.5 * scale);
+                
+                ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+                ctx.fillStyle = '#ef4444'; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 5 * scale;
+                ctx.fill(); ctx.shadowColor = 'transparent';
+                
+                ctx.beginPath(); ctx.arc(px - r*0.7, py - r*0.6, r*0.5, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+                ctx.beginPath(); ctx.arc(px + r*0.7, py - r*0.6, r*0.5, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+              });
+
+              ctx.restore();
+              animationId = requestAnimationFrame(render);
+            };
+            render();
+            return () => cancelAnimationFrame(animationId);
+          }, []);
+
+          const handleDown = (e) => { 
+            if (e.touches && e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX;
+              const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDist.current = Math.hypot(dx, dy);
+              isDragging.current = false;
+            } else {
+              isDragging.current = true; lastPinchDist.current = null; lastMousePos.current = getPos(e); 
+            }
+          };
+          const handleMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+              if (lastPinchDist.current !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                zoomRef.current += (lastPinchDist.current - dist) * 1.5;
+                zoomRef.current = Math.max(100, Math.min(800, zoomRef.current));
+                lastPinchDist.current = dist;
+              }
+              return;
+            }
+            if (!isDragging.current) return;
+            const { x, y } = getPos(e);
+            angleYRef.current += (x - lastMousePos.current.x) * 0.006;
+            angleXRef.current += (y - lastMousePos.current.y) * 0.006;
+            angleXRef.current = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, angleXRef.current));
+            lastMousePos.current = { x, y };
+          };
+          const handleUp = () => { isDragging.current = false; lastPinchDist.current = null; };
+
+          return (
+            <div className="w-full h-full flex flex-col items-center">
+              <div className="flex-1 w-full relative" onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp} onMouseLeave={handleUp} onTouchStart={handleDown} onTouchMove={handleMove} onTouchEnd={handleUp} onTouchCancel={handleUp}>
+                <canvas ref={canvasRef} width={1200} height={900} className="w-full h-full object-contain cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }} />
+              </div>
+
+              <div className="flex flex-wrap gap-2 p-2 shrink-0 w-full justify-center bg-slate-900/50 z-20">
+                 <button onClick={() => setMode('x')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='x'?'bg-red-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>X轴平动</button>
+                 <button onClick={() => setMode('y')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='y'?'bg-green-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>Y轴平动</button>
+                 <button onClick={() => setMode('z')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='z'?'bg-blue-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>Z轴平动</button>
+                 <button onClick={() => setMode('all')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='all'?'bg-purple-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>三维自由</button>
+              </div>
+            </div>
+          );
+        };
+
+        // 2. 转动能 (支持双指缩放)
+        const RotationalVis = ({ temperature }) => {
+          const canvasRef = useRef(null);
+          const [mode, setMode] = useState('all'); 
+          const tempRef = useRef(temperature);
+          const modeRef = useRef(mode); 
+          const angleXRef = useRef(0.3); const angleYRef = useRef(0.6);
+          const zoomRef = useRef(200);
+          const isDragging = useRef(false); const lastMousePos = useRef({ x: 0, y: 0 });
+          const lastPinchDist = useRef(null);
+
+          useEffect(() => { tempRef.current = temperature; }, [temperature]);
+          useEffect(() => { modeRef.current = mode; }, [mode]);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const handleWheel = (e) => {
+              e.preventDefault();
+              zoomRef.current += e.deltaY * 0.5;
+              zoomRef.current = Math.max(100, Math.min(600, zoomRef.current));
+            };
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+          }, []);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationId; let time = 0; const W = 400; const H = 300;
+            const R_O = 45; const R_H = 25; const bondLength = 40; const angle = 104.5 / 2 * (Math.PI / 180);
+            const y_O = -(bondLength * Math.cos(angle)) / 9; 
+            const y_H = y_O + bondLength * Math.cos(angle); const x_H = bondLength * Math.sin(angle);
+
+            const baseAtoms = [
+              { type: 'O', x: 0, y: y_O, z: 0, r: R_O },
+              { type: 'H', x: -x_H, y: y_H, z: 0, r: R_H },
+              { type: 'H', x: x_H, y: y_H, z: 0, r: R_H }
+            ];
+
+            const project = (x, y, z, camX, camY, distance) => {
+              let y1 = y * Math.cos(camX) - z * Math.sin(camX); let z1 = y * Math.sin(camX) + z * Math.cos(camX);
+              let x2 = x * Math.cos(camY) + z1 * Math.sin(camY); let z2 = -x * Math.sin(camY) + z1 * Math.cos(camY);
+              const fov = 350; const scale = fov / (fov + z2 + distance);
+              return { px: W / 2 + x2 * scale, py: H / 2 - y1 * scale, scale, depth: z2 };
+            };
+
+            const drawLine3D = (p1, p2, color, camX, camY, distance, lineWidth = 1, dashed = false) => {
+              const proj1 = project(p1.x, p1.y, p1.z, camX, camY, distance);
+              const proj2 = project(p2.x, p2.y, p2.z, camX, camY, distance);
+              ctx.beginPath(); ctx.moveTo(proj1.px, proj1.py); ctx.lineTo(proj2.px, proj2.py);
+              ctx.strokeStyle = color; ctx.lineWidth = lineWidth;
+              if (dashed) ctx.setLineDash([4, 4]);
+              ctx.stroke(); ctx.setLineDash([]);
+            };
+
+            const render = () => {
+              const speedFactor = Math.sqrt(Math.max(0.1, tempRef.current) / 300);
+              time += 0.02 * speedFactor;
+              
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.save(); ctx.scale(3, 3);
+
+              const camX = angleXRef.current; const camY = angleYRef.current; const distance = zoomRef.current;
+
+              const axisLen = 100;
+              drawLine3D({x: -axisLen, y: 0, z: 0}, {x: axisLen, y: 0, z: 0}, 'rgba(239, 68, 68, 0.6)', camX, camY, distance, 1.5, true); 
+              drawLine3D({x: 0, y: -axisLen, z: 0}, {x: 0, y: axisLen, z: 0}, 'rgba(34, 197, 94, 0.6)', camX, camY, distance, 1.5, true); 
+              drawLine3D({x: 0, y: 0, z: -axisLen}, {x: 0, y: 0, z: axisLen}, 'rgba(59, 130, 246, 0.6)', camX, camY, distance, 1.5, true); 
+
+              ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              const projX = project(axisLen + 15, 0, 0, camX, camY, distance);
+              const projY = project(0, axisLen + 15, 0, camX, camY, distance);
+              const projZ = project(0, 0, axisLen + 15, camX, camY, distance);
+              ctx.fillStyle = '#ef4444'; ctx.fillText('X', projX.px, projX.py);
+              ctx.fillStyle = '#22c55e'; ctx.fillText('Y', projY.px, projY.py);
+              ctx.fillStyle = '#3b82f6'; ctx.fillText('Z', projZ.px, projZ.py);
+
+              let rx = 0, ry = 0, rz = 0;
+              if (modeRef.current === 'x') rx = time * 1.5;
+              else if (modeRef.current === 'y') ry = time * 1.5;
+              else if (modeRef.current === 'z') rz = time * 1.5;
+              else { rx = time * 0.8; ry = time * 1.2; rz = time * 0.5; }
+              
+              const cosX = Math.cos(rx), sinX = Math.sin(rx);
+              const cosY = Math.cos(ry), sinY = Math.sin(ry);
+              const cosZ = Math.cos(rz), sinZ = Math.sin(rz);
+
+              let projected = baseAtoms.map(atom => {
+                let x1 = atom.x * cosZ - atom.y * sinZ; let y1 = atom.x * sinZ + atom.y * cosZ; let z1 = atom.z;
+                let x2 = x1; let y2 = y1 * cosX - z1 * sinX; let z2 = y1 * sinX + z1 * cosX;
+                let x3 = x2 * cosY + z2 * sinY; let y3 = y2; let z3 = -x2 * sinY + z2 * cosY;
+                return { ...atom, ...project(x3, y3, z3, camX, camY, distance) };
+              });
+
+              projected.sort((a, b) => b.depth - a.depth);
+
+              projected.forEach(p => {
+                const r = p.r * p.scale;
+                const grad = ctx.createRadialGradient(p.px - r*0.3, p.py - r*0.3, r*0.1, p.px, p.py, r);
+                if (p.type === 'O') { grad.addColorStop(0, '#fca5a5'); grad.addColorStop(0.3, '#ef4444'); grad.addColorStop(1, '#7f1d1d'); } 
+                else { grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.5, '#e2e8f0'); grad.addColorStop(1, '#64748b'); }
+                ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2);
+                ctx.fillStyle = grad; ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3 * p.scale; ctx.shadowOffsetY = 3 * p.scale;
+                ctx.fill(); ctx.shadowColor = 'transparent';
+                ctx.fillStyle = p.type === 'O' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)';
+                ctx.font = `bold ${16 * p.scale}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.type, p.px, p.py);
+              });
+
+              ctx.restore(); animationId = requestAnimationFrame(render);
+            };
+            render();
+            return () => cancelAnimationFrame(animationId);
+          }, []);
+
+          const handleDown = (e) => { 
+            if (e.touches && e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDist.current = Math.hypot(dx, dy); isDragging.current = false;
+            } else {
+              isDragging.current = true; lastPinchDist.current = null; lastMousePos.current = getPos(e); 
+            }
+          };
+          const handleMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+              if (lastPinchDist.current !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy); zoomRef.current += (lastPinchDist.current - dist) * 1.5;
+                zoomRef.current = Math.max(100, Math.min(800, zoomRef.current)); lastPinchDist.current = dist;
+              }
+              return;
+            }
+            if (!isDragging.current) return;
+            const { x, y } = getPos(e);
+            angleYRef.current += (x - lastMousePos.current.x) * 0.006; angleXRef.current += (y - lastMousePos.current.y) * 0.006;
+            lastMousePos.current = { x, y };
+          };
+          const handleUp = () => { isDragging.current = false; lastPinchDist.current = null; };
+
+          return (
+            <div className="w-full h-full flex flex-col items-center">
+              <div className="flex-1 w-full relative" onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp} onMouseLeave={handleUp} onTouchStart={handleDown} onTouchMove={handleMove} onTouchEnd={handleUp} onTouchCancel={handleUp}>
+                <canvas ref={canvasRef} width={1200} height={900} className="w-full h-full object-contain cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }} />
+                <p className="absolute top-2 left-2 text-[10px] text-slate-400 bg-slate-900/60 px-2 py-1 rounded pointer-events-none">绕质量中心转动</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 p-2 shrink-0 w-full justify-center bg-slate-900/50 z-20">
+                 <button onClick={() => setMode('x')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='x'?'bg-red-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>X轴转动</button>
+                 <button onClick={() => setMode('y')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='y'?'bg-green-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>Y轴转动</button>
+                 <button onClick={() => setMode('z')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='z'?'bg-blue-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>Z轴转动</button>
+                 <button onClick={() => setMode('all')} className={`px-3 py-1.5 text-xs font-medium rounded ${mode==='all'?'bg-purple-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>三轴复合</button>
+              </div>
+            </div>
+          );
+        };
+
+        // 3. 振动能 (支持双指缩放)
+        const VibrationalVis = ({ temperature }) => {
+          const canvasRef = useRef(null);
+          const [mode, setMode] = useState('sym');
+          const tempRef = useRef(temperature); const modeRef = useRef(mode);
+          const angleXRef = useRef(0.1); const angleYRef = useRef(0.2); const zoomRef = useRef(180);
+          const isDragging = useRef(false); const lastMousePos = useRef({ x: 0, y: 0 });
+          const lastPinchDist = useRef(null);
+
+          useEffect(() => { tempRef.current = temperature; }, [temperature]);
+          useEffect(() => { modeRef.current = mode; }, [mode]);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const handleWheel = (e) => {
+              e.preventDefault(); zoomRef.current += e.deltaY * 0.5;
+              zoomRef.current = Math.max(100, Math.min(500, zoomRef.current));
+            };
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+          }, []);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationId; let time = 0; const W = 400; const H = 300;
+            const R_O = 40; const R_H = 20; const bondLength = 55; const angle = 104.5 / 2 * (Math.PI / 180);
+            const y_O = -(bondLength * Math.cos(angle)) / 9; const y_H = y_O + bondLength * Math.cos(angle); const x_H = bondLength * Math.sin(angle);
+
+            const project = (x, y, z, camX, camY, distance) => {
+              let y1 = y * Math.cos(camX) - z * Math.sin(camX); let z1 = y * Math.sin(camX) + z * Math.cos(camX);
+              let x2 = x * Math.cos(camY) + z1 * Math.sin(camY); let z2 = -x * Math.sin(camY) + z1 * Math.cos(camY);
+              const fov = 350; const scale = fov / (fov + z2 + distance);
+              return { px: W / 2 + x2 * scale, py: H / 2 - y1 * scale, scale, depth: z2 };
+            };
+
+            const drawLine3D = (p1, p2, color, camX, camY, distance, lineWidth = 1) => {
+              const proj1 = project(p1.x, p1.y, p1.z, camX, camY, distance); const proj2 = project(p2.x, p2.y, p2.z, camX, camY, distance);
+              ctx.beginPath(); ctx.moveTo(proj1.px, proj1.py); ctx.lineTo(proj2.px, proj2.py);
+              ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.stroke();
+            };
+
+            const render = () => {
+              const speedFactor = Math.sqrt(Math.max(10, tempRef.current) / 300);
+              time += 0.1 * speedFactor; 
+              ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.save(); ctx.scale(3, 3);
+
+              const camX = angleXRef.current; const camY = angleYRef.current; const distance = zoomRef.current;
+              drawLine3D({x:-100,y:0,z:0}, {x:100,y:0,z:0}, 'rgba(255,255,255,0.08)', camX, camY, distance, 1);
+              drawLine3D({x:0,y:-100,z:0}, {x:0,y:100,z:0}, 'rgba(255,255,255,0.08)', camX, camY, distance, 1);
+
+              const phase = Math.sin(time); const currentMode = modeRef.current; const amp = 12; 
+              let dx1=0, dy1=0, dx2=0, dy2=0, dxO=0, dyO=0;
+
+              if (currentMode === 'sym') {
+                dx1 = -Math.sin(angle)*amp; dy1 = -Math.cos(angle)*amp; dx2 = Math.sin(angle)*amp; dy2 = -Math.cos(angle)*amp; dyO = Math.cos(angle)*amp * (2/16);
+              } else if (currentMode === 'asym') {
+                dx1 = -Math.sin(angle)*amp; dy1 = -Math.cos(angle)*amp; dx2 = -Math.sin(angle)*amp; dy2 = Math.cos(angle)*amp; dxO = Math.sin(angle)*amp * (2/16);
+              } else if (currentMode === 'bend') {
+                dx1 = -Math.cos(angle)*amp; dy1 = Math.sin(angle)*amp; dx2 = Math.cos(angle)*amp; dy2 = Math.sin(angle)*amp; dyO = -Math.sin(angle)*amp * (2/16);
+              }
+
+              const atoms = [
+                { type: 'O', x: dxO*phase, y: y_O + dyO*phase, z: 0, r: R_O },
+                { type: 'H', x: -x_H + dx1*phase, y: y_H + dy1*phase, z: 0, r: R_H },
+                { type: 'H', x: x_H + dx2*phase, y: y_H + dy2*phase, z: 0, r: R_H }
+              ];
+
+              drawLine3D(atoms[0], atoms[1], 'rgba(16, 185, 129, 0.8)', camX, camY, distance, 4);
+              drawLine3D(atoms[0], atoms[2], 'rgba(16, 185, 129, 0.8)', camX, camY, distance, 4);
+
+              let projected = atoms.map(atom => ({ ...atom, ...project(atom.x, atom.y, atom.z, camX, camY, distance) }));
+              projected.sort((a, b) => b.depth - a.depth);
+
+              projected.forEach(p => {
+                const r = p.r * p.scale;
+                const grad = ctx.createRadialGradient(p.px - r*0.3, p.py - r*0.3, r*0.1, p.px, p.py, r);
+                if (p.type === 'O') { grad.addColorStop(0, '#fca5a5'); grad.addColorStop(0.3, '#ef4444'); grad.addColorStop(1, '#7f1d1d'); } 
+                else { grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.5, '#e2e8f0'); grad.addColorStop(1, '#64748b'); }
+                ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2);
+                ctx.fillStyle = grad; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 2 * p.scale; ctx.shadowOffsetY = 2 * p.scale;
+                ctx.fill(); ctx.shadowColor = 'transparent';
+              });
+
+              ctx.restore(); animationId = requestAnimationFrame(render);
+            };
+            render();
+            return () => cancelAnimationFrame(animationId);
+          }, []);
+
+          const handleDown = (e) => { 
+            if (e.touches && e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDist.current = Math.hypot(dx, dy); isDragging.current = false;
+            } else {
+              isDragging.current = true; lastPinchDist.current = null; lastMousePos.current = getPos(e); 
+            }
+          };
+          const handleMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+              if (lastPinchDist.current !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy); zoomRef.current += (lastPinchDist.current - dist) * 1.5;
+                zoomRef.current = Math.max(100, Math.min(800, zoomRef.current)); lastPinchDist.current = dist;
+              }
+              return;
+            }
+            if (!isDragging.current) return;
+            const { x, y } = getPos(e);
+            angleYRef.current -= (x - lastMousePos.current.x) * 0.006; angleXRef.current += (y - lastMousePos.current.y) * 0.006;
+            lastMousePos.current = { x, y };
+          };
+          const handleUp = () => { isDragging.current = false; lastPinchDist.current = null; };
+
+          return (
+            <div className="w-full h-full flex flex-col items-center">
+              <div className="flex-1 w-full relative" onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp} onMouseLeave={handleUp} onTouchStart={handleDown} onTouchMove={handleMove} onTouchEnd={handleUp} onTouchCancel={handleUp}>
+                 <canvas ref={canvasRef} width={1200} height={900} className="w-full h-full object-contain cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }} />
+              </div>
+              <div className="flex gap-2 p-2 shrink-0 w-full justify-center bg-slate-900/50">
+                 <button onClick={() => setMode('sym')} className={`px-2 py-1.5 text-xs font-medium rounded ${mode==='sym'?'bg-emerald-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>对称伸缩</button>
+                 <button onClick={() => setMode('bend')} className={`px-2 py-1.5 text-xs font-medium rounded ${mode==='bend'?'bg-emerald-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>弯曲振动</button>
+                 <button onClick={() => setMode('asym')} className={`px-2 py-1.5 text-xs font-medium rounded ${mode==='asym'?'bg-emerald-500 text-white':'bg-slate-800 text-slate-300 border border-slate-700'}`}>不对称伸缩</button>
+              </div>
+            </div>
+          );
+        };
+
+        // 4. 电子能 (增加透明外壳轮廓与双指缩放)
+        const ElectronicVis = () => {
+          const canvasRef = useRef(null);
+          const [isExcited, setIsExcited] = useState(false);
+          const excitedRef = useRef(false);
+          const angleXRef = useRef(0.2); const angleYRef = useRef(0.4); const zoomRef = useRef(250);
+          const isDragging = useRef(false); const lastMousePos = useRef({ x: 0, y: 0 });
+          const lastPinchDist = useRef(null);
+
+          useEffect(() => { excitedRef.current = isExcited; }, [isExcited]);
+          const randn_bm = () => {
+            let u = 0, v = 0; while(u === 0) u = Math.random(); while(v === 0) v = Math.random();
+            return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+          };
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const handleWheel = (e) => {
+              e.preventDefault(); zoomRef.current += e.deltaY * 0.5;
+              zoomRef.current = Math.max(100, Math.min(600, zoomRef.current));
+            };
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+          }, []);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationId; const W = 400; const H = 300;
+            const R_O = 18; const R_H = 10; const bondLength = 45; const angle = 104.5 / 2 * (Math.PI / 180);
+            const y_O = -(bondLength * Math.cos(angle)) / 9; const y_H = y_O + bondLength * Math.cos(angle); const x_H = bondLength * Math.sin(angle);
+
+            const project = (x, y, z, camX, camY, distance) => {
+              let y1 = y * Math.cos(camX) - z * Math.sin(camX); let z1 = y * Math.sin(camX) + z * Math.cos(camX);
+              let x2 = x * Math.cos(camY) + z1 * Math.sin(camY); let z2 = -x * Math.sin(camY) + z1 * Math.cos(camY);
+              const fov = 350; const scale = fov / (fov + z2 + distance);
+              return { px: W / 2 + x2 * scale, py: H / 2 - y1 * scale, scale, depth: z2 };
+            };
+
+            const render = () => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.save(); ctx.scale(3, 3);
+              const camX = angleXRef.current; const camY = angleYRef.current; const distance = zoomRef.current; const isLUMO = excitedRef.current;
+
+              let renderItems = [];
+              renderItems.push({ type: 'atom', atomType: 'O', x: 0, y: y_O, z: 0, r: R_O, ...project(0, y_O, 0, camX, camY, distance) });
+              renderItems.push({ type: 'atom', atomType: 'H', x: -x_H, y: y_H, z: 0, r: R_H, ...project(-x_H, y_H, 0, camX, camY, distance) });
+              renderItems.push({ type: 'atom', atomType: 'H', x: x_H, y: y_H, z: 0, r: R_H, ...project(x_H, y_H, 0, camX, camY, distance) });
+
+              // === 新增：电子云透明轮廓外壳 (Isodensity Shells) ===
+              if (!isLUMO) {
+                 renderItems.push({ type: 'shell', x: 0, y: y_O, z: 40, r: 35, colorRGB: '251, 191, 36', ...project(0, y_O, 40, camX, camY, distance) });
+                 renderItems.push({ type: 'shell', x: 0, y: y_O, z: -40, r: 35, colorRGB: '251, 191, 36', ...project(0, y_O, -40, camX, camY, distance) });
+              } else {
+                 renderItems.push({ type: 'shell', x: 0, y: y_O - 45, z: 0, r: 50, colorRGB: '244, 63, 94', ...project(0, y_O - 45, 0, camX, camY, distance) });
+                 renderItems.push({ type: 'shell', x: -x_H - 35, y: y_H + 20, z: 0, r: 38, colorRGB: '244, 63, 94', ...project(-x_H - 35, y_H + 20, 0, camX, camY, distance) });
+                 renderItems.push({ type: 'shell', x: x_H + 35, y: y_H + 20, z: 0, r: 38, colorRGB: '244, 63, 94', ...project(x_H + 35, y_H + 20, 0, camX, camY, distance) });
+              }
+
+              const numPoints = 2500; 
+              for (let i = 0; i < numPoints; i++) {
+                let px, py, pz, color;
+                if (!isLUMO) {
+                  const isTopLobe = Math.random() > 0.5; const zOffset = isTopLobe ? 40 : -40;
+                  px = randn_bm() * 20; py = y_O + randn_bm() * 20; pz = zOffset + randn_bm() * 20;
+                  color = 'rgba(251, 191, 36, 0.4)';
+                } else {
+                  const r = Math.random();
+                  if (r < 0.4) { px = randn_bm() * 35; py = y_O - 45 + randn_bm() * 35; pz = randn_bm() * 35; } 
+                  else if (r < 0.7) { px = -x_H - 35 + randn_bm() * 25; py = y_H + 20 + randn_bm() * 25; pz = randn_bm() * 25; } 
+                  else { px = x_H + 35 + randn_bm() * 25; py = y_H + 20 + randn_bm() * 25; pz = randn_bm() * 25; }
+                  color = 'rgba(244, 63, 94, 0.3)';
+                }
+                if (Math.abs(px) < 200 && Math.abs(py) < 200 && Math.abs(pz) < 200) {
+                   renderItems.push({ type: 'particle', x: px, y: py, z: pz, color, ...project(px, py, pz, camX, camY, distance) });
+                }
+              }
+
+              // 深度排序确保透明叠加的渲染正确性
+              renderItems.sort((a, b) => b.depth - a.depth);
+
+              renderItems.forEach(item => {
+                if (item.type === 'particle') {
+                   ctx.fillStyle = item.color; ctx.fillRect(item.px, item.py, 1.5 * item.scale, 1.5 * item.scale);
+                } else if (item.type === 'shell') {
+                   const r = item.r * item.scale;
+                   ctx.beginPath(); ctx.arc(item.px, item.py, r, 0, Math.PI * 2);
+                   ctx.fillStyle = `rgba(${item.colorRGB}, 0.08)`; ctx.fill();
+                   ctx.strokeStyle = `rgba(${item.colorRGB}, 0.5)`; ctx.lineWidth = 1.5 * item.scale; ctx.stroke();
+                } else if (item.type === 'atom') {
+                   const r = item.r * item.scale;
+                   const grad = ctx.createRadialGradient(item.px - r*0.3, item.py - r*0.3, r*0.1, item.px, item.py, r);
+                   if (item.atomType === 'O') { grad.addColorStop(0, '#fca5a5'); grad.addColorStop(0.3, '#be123c'); grad.addColorStop(1, '#4c0519'); } 
+                   else { grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.5, '#64748b'); grad.addColorStop(1, '#0f172a'); }
+                   ctx.beginPath(); ctx.arc(item.px, item.py, r, 0, Math.PI * 2);
+                   ctx.fillStyle = grad; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 5 * item.scale;
+                   ctx.fill(); ctx.shadowColor = 'transparent';
+                   
+                   if (item.atomType === 'O') {
+                      const projH1 = project(-x_H, y_H, 0, camX, camY, distance); const projH2 = project(x_H, y_H, 0, camX, camY, distance);
+                      ctx.beginPath(); ctx.moveTo(item.px, item.py); ctx.lineTo(projH1.px, projH1.py);
+                      ctx.moveTo(item.px, item.py); ctx.lineTo(projH2.px, projH2.py);
+                      ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2 * item.scale; ctx.stroke();
+                   }
+                }
+              });
+
+              if (isLUMO) {
+                const np1 = project(-150, y_O + 15, -120, camX, camY, distance); const np2 = project(150, y_O + 15, -120, camX, camY, distance);
+                const np3 = project(150, y_O + 15, 120, camX, camY, distance); const np4 = project(-150, y_O + 15, 120, camX, camY, distance);
+                ctx.beginPath(); ctx.moveTo(np1.px, np1.py); ctx.lineTo(np2.px, np2.py); ctx.lineTo(np3.px, np3.py); ctx.lineTo(np4.px, np4.py); ctx.closePath();
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+                ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('节面', np2.px, np2.py - 10);
+              }
+
+              ctx.restore(); animationId = requestAnimationFrame(render);
+            };
+            render();
+            return () => cancelAnimationFrame(animationId);
+          }, []);
+
+          const handleDown = (e) => { 
+            if (e.touches && e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDist.current = Math.hypot(dx, dy); isDragging.current = false;
+            } else {
+              isDragging.current = true; lastPinchDist.current = null; lastMousePos.current = getPos(e); 
+            }
+          };
+          const handleMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+              if (lastPinchDist.current !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy); zoomRef.current += (lastPinchDist.current - dist) * 1.5;
+                zoomRef.current = Math.max(100, Math.min(800, zoomRef.current)); lastPinchDist.current = dist;
+              }
+              return;
+            }
+            if (!isDragging.current) return;
+            const { x, y } = getPos(e);
+            angleYRef.current -= (x - lastMousePos.current.x) * 0.006; angleXRef.current += (y - lastMousePos.current.y) * 0.006;
+            lastMousePos.current = { x, y };
+          };
+          const handleUp = () => { isDragging.current = false; lastPinchDist.current = null; };
+
+          return (
+            <div className="w-full h-full flex flex-col items-center">
+              <div className="flex-1 w-full relative" onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp} onMouseLeave={handleUp} onTouchStart={handleDown} onTouchMove={handleMove} onTouchEnd={handleUp} onTouchCancel={handleUp}>
+                 <canvas ref={canvasRef} width={1200} height={900} className="w-full h-full object-contain cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }} />
+              </div>
+              <div className="flex gap-2 p-2 shrink-0 w-full justify-center bg-slate-900/50 z-20">
+                 <button onClick={() => setIsExcited(false)} className={`px-4 py-1.5 text-xs font-bold rounded ${!isExcited ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-300 border border-slate-700'}`}>基态 (HOMO)</button>
+                 <button onClick={() => setIsExcited(true)} className={`px-4 py-1.5 text-xs font-bold rounded ${isExcited ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-300 border border-slate-700'}`}>激发态 (LUMO)</button>
+              </div>
+            </div>
+          );
+        };
+
+        // 5. 核能 (支持双指缩放)
+        const NuclearVis = () => {
+          const canvasRef = useRef(null);
+          const angleXRef = useRef(0.2); const angleYRef = useRef(0.5); const zoomRef = useRef(150);
+          const isDragging = useRef(false); const lastMousePos = useRef({ x: 0, y: 0 });
+          const lastPinchDist = useRef(null);
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const handleWheel = (e) => {
+              e.preventDefault(); zoomRef.current += e.deltaY * 0.5;
+              zoomRef.current = Math.max(80, Math.min(400, zoomRef.current));
+            };
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+          }, []);
+
+          const baseNucleons = useRef(Array.from({ length: 16 }).map((_, i) => {
+            const r = Math.cbrt(Math.random()) * 20; const theta = Math.random() * 2 * Math.PI; const phi = Math.acos(2 * Math.random() - 1);
+            return { id: i, isProton: i < 8, x: r * Math.sin(phi) * Math.cos(theta), y: r * Math.sin(phi) * Math.sin(theta), z: r * Math.cos(phi), phase: Math.random() * Math.PI * 2 };
+          }));
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationId; let time = 0; const W = 400; const H = 300;
+
+            const project = (x, y, z, camX, camY, distance) => {
+              let y1 = y * Math.cos(camX) - z * Math.sin(camX); let z1 = y * Math.sin(camX) + z * Math.cos(camX);
+              let x2 = x * Math.cos(camY) + z1 * Math.sin(camY); let z2 = -x * Math.sin(camY) + z1 * Math.cos(camY);
+              const fov = 350; const scale = fov / (fov + z2 + distance);
+              return { px: W / 2 + x2 * scale, py: H / 2 - y1 * scale, scale, depth: z2 };
+            };
+
+            const render = () => {
+              time += 0.3; 
+              ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.save(); ctx.scale(3, 3);
+
+              const camX = angleXRef.current; const camY = angleYRef.current; const distance = zoomRef.current;
+
+              const centerProj = project(0, 0, 0, camX, camY, distance);
+              const auraGrad = ctx.createRadialGradient(centerProj.px, centerProj.py, 10, centerProj.px, centerProj.py, 120 * centerProj.scale);
+              auraGrad.addColorStop(0, 'rgba(225, 29, 72, 0.5)'); auraGrad.addColorStop(1, 'transparent');
+              ctx.fillStyle = auraGrad; ctx.fillRect(0, 0, W, H);
+
+              let projected = baseNucleons.current.map(n => {
+                const trembleAmp = 1.5;
+                const tx = n.x + Math.sin(time + n.phase) * trembleAmp; const ty = n.y + Math.cos(time * 1.1 + n.phase) * trembleAmp; const tz = n.z + Math.sin(time * 0.9 + n.phase) * trembleAmp;
+                return { ...n, ...project(tx, ty, tz, camX, camY, distance) };
+              });
+
+              projected.sort((a, b) => b.depth - a.depth);
+
+              projected.forEach(p => {
+                const r = 8 * p.scale;
+                const grad = ctx.createRadialGradient(p.px - r*0.3, p.py - r*0.3, r*0.1, p.px, p.py, r);
+                if (p.isProton) { grad.addColorStop(0, '#fda4af'); grad.addColorStop(0.3, '#f43f5e'); grad.addColorStop(1, '#881337'); } 
+                else { grad.addColorStop(0, '#e2e8f0'); grad.addColorStop(0.3, '#94a3b8'); grad.addColorStop(1, '#334155'); }
+                ctx.beginPath(); ctx.arc(p.px, p.py, r, 0, Math.PI * 2);
+                ctx.fillStyle = grad; ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8 * p.scale; ctx.shadowOffsetX = 2 * p.scale; ctx.shadowOffsetY = 2 * p.scale;
+                ctx.fill(); ctx.shadowColor = 'transparent';
+
+                if (p.isProton) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = `bold ${10 * p.scale}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', p.px, p.py); }
+              });
+
+              ctx.restore(); animationId = requestAnimationFrame(render);
+            };
+            render();
+            return () => cancelAnimationFrame(animationId);
+          }, []);
+
+          const handleDown = (e) => { 
+            if (e.touches && e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDist.current = Math.hypot(dx, dy); isDragging.current = false;
+            } else {
+              isDragging.current = true; lastPinchDist.current = null; lastMousePos.current = getPos(e); 
+            }
+          };
+          const handleMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+              if (lastPinchDist.current !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy); zoomRef.current += (lastPinchDist.current - dist) * 1.5;
+                zoomRef.current = Math.max(80, Math.min(400, zoomRef.current)); lastPinchDist.current = dist;
+              }
+              return;
+            }
+            if (!isDragging.current) return;
+            const { x, y } = getPos(e);
+            angleYRef.current -= (x - lastMousePos.current.x) * 0.006; angleXRef.current += (y - lastMousePos.current.y) * 0.006; lastMousePos.current = { x, y };
+          };
+          const handleUp = () => { isDragging.current = false; lastPinchDist.current = null; };
+
+          return (
+            <div className="w-full h-full relative" onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp} onMouseLeave={handleUp} onTouchStart={handleDown} onTouchMove={handleMove} onTouchEnd={handleUp} onTouchCancel={handleUp}>
+               <canvas ref={canvasRef} width={1200} height={900} className="w-full h-full object-contain cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }} />
+               <p className="absolute bottom-2 left-2 text-[10px] font-bold text-rose-300 bg-slate-900/60 px-2 py-1 rounded pointer-events-none">氧-16核簇</p>
+            </div>
+          );
+        };
+
+        // 6. 分子间势能 (优化横屏布局高度，解决重叠)
+        const IntermolecularVis = () => {
+          const [distance, setDistance] = useState(1.8);
+          const calculateV = (r) => Math.pow(1.2/r, 12) - 2.5 * Math.pow(1.2/r, 6);
+          const currentV = calculateV(distance);
+          
+          let stateText = "", stateColor = "";
+          if (distance < 1.05) { stateText = "强斥力"; stateColor = "text-red-400"; }
+          else if (distance >= 1.05 && distance <= 1.5) { stateText = "氢键最稳态"; stateColor = "text-cyan-400 font-bold"; }
+          else { stateText = "引力减弱"; stateColor = "text-blue-300"; }
+
+          let path = "";
+          for(let r = 0.85; r <= 3.0; r += 0.05) {
+            let v = calculateV(r); if (v > 2) v = 2; 
+            let x = ((r - 0.8) / 2.2) * 300; let y = 80 - (v * 35); path += `${r === 0.85 ? 'M' : 'L'} ${x} ${y} `;
+          }
+
+          const markerX = ((distance - 0.8) / 2.2) * 300;
+          let displayV = currentV > 2 ? 2 : currentV; const markerY = 80 - (displayV * 35);
+          const isHydrogenBond = distance >= 1.05 && distance <= 1.6;
+
+          return (
+            <div className="flex flex-col items-center justify-between w-full h-full p-2 overflow-hidden">
+               <div className="w-full max-w-[300px] flex-1 min-h-[80px] max-h-[100px] relative bg-slate-900/40 rounded-lg overflow-hidden shrink-0">
+                  <div className="absolute top-1/2 left-[20%] -translate-y-1/2 -translate-x-1/2 flex items-center z-20">
+                     <div className="relative w-10 h-10">
+                       <div className="absolute inset-0 bg-red-500 rounded-full z-10 flex items-center justify-center text-white/50 text-[10px]">O</div>
+                       <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-4 bg-slate-200 rounded-full flex items-center justify-center shadow-md border border-slate-300 z-20"><span className="text-[8px] text-slate-700 font-bold">H</span></div>
+                       <div className="absolute -bottom-0.5 -left-0.5 w-4 h-4 bg-slate-200 rounded-full flex items-center justify-center shadow-md border border-slate-300 z-0"><span className="text-[8px] text-slate-700 font-bold scale-75">H</span></div>
+                     </div>
+                  </div>
+                  <div className="absolute top-1/2 -translate-y-1/2 flex items-center z-10" style={{ left: `calc(20% + ${distance * 65}px)` }}>
+                     <div className="relative w-10 h-10">
+                       <div className="absolute inset-0 bg-red-500 rounded-full z-10 flex items-center justify-center text-white/50 text-[10px]">O</div>
+                       <div className="absolute -top-0.5 -right-1 w-4 h-4 bg-slate-200 rounded-full flex items-center justify-center z-0 shadow-md border border-slate-300"><span className="text-[8px] text-slate-700 font-bold">H</span></div>
+                       <div className="absolute -bottom-0.5 -right-1 w-4 h-4 bg-slate-200 rounded-full flex items-center justify-center z-0 shadow-md border border-slate-300"><span className="text-[8px] text-slate-700 font-bold">H</span></div>
+                     </div>
+                  </div>
+                  {isHydrogenBond && (
+                    <div className="absolute top-1/2 -translate-y-1/2 h-1.5 border-b-2 border-dashed border-cyan-400 animate-pulse z-0" style={{ left: 'calc(20% + 14px)', width: `calc(${distance * 65}px - 20px)` }}>
+                      <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-cyan-300 text-[9px] font-bold whitespace-nowrap">氢键 O···H</span>
+                    </div>
+                  )}
+               </div>
+
+               <div className="w-full max-w-[300px] flex-1 min-h-[100px] mt-2 shrink-0">
+                  <svg viewBox="0 0 300 120" className="w-full h-full overflow-visible">
+                    <line x1="0" y1="80" x2="300" y2="80" stroke="#475569" strokeWidth="2" strokeDasharray="3 3" />
+                    <line x1="20" y1="0" x2="20" y2="120" stroke="#475569" strokeWidth="2" />
+                    <text x="280" y="72" fill="#64748b" fontSize="10">r</text>
+                    <text x="25" y="10" fill="#64748b" fontSize="10">V</text>
+                    <path d={path} fill="none" stroke="#06b6d4" strokeWidth="2.5" />
+                    <circle cx={markerX} cy={markerY} r="5" fill="#fff" stroke="#06b6d4" strokeWidth="2" />
+                  </svg>
+               </div>
+               
+               <div className="w-full mt-2 mb-2 flex flex-col items-center shrink-0">
+                  <input type="range" min="0.85" max="3.0" step="0.01" value={distance} onChange={(e) => setDistance(parseFloat(e.target.value))} className="w-full max-w-[250px] accent-cyan-500" />
+                  <div className="text-xs mt-1 text-center font-medium"><span className={`${stateColor}`}>{stateText}</span></div>
+               </div>
+            </div>
+          );
+        };
+
+        // === 主应用框架 ===
+        function App() {
+          const [activeIndex, setActiveIndex] = useState(0);
+          const [temperature, setTemperature] = useState(300);
+          const activeData = energyConcepts[activeIndex];
+
+          const renderVisualizer = () => {
+            switch(activeData.id) {
+              case 'translational': return <TranslationalVis temperature={temperature} />;
+              case 'rotational': return <RotationalVis temperature={temperature} />;
+              case 'vibrational': return <VibrationalVis temperature={temperature} />;
+              case 'electronic': return <ElectronicVis />;
+              case 'nuclear': return <NuclearVis />;
+              case 'intermolecular': return <IntermolecularVis />;
+              default: return null;
+            }
+          };
+
+          return (
+            <div className="h-screen w-screen flex flex-row text-slate-200 font-sans overflow-hidden bg-[#0f172a]">
+              
+              <nav className="w-[120px] md:w-[140px] shrink-0 bg-slate-900 border-r border-slate-800 p-2 overflow-y-auto flex flex-col gap-1.5 pb-8 safe-area-l">
+                {energyConcepts.map((item, index) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveIndex(index)}
+                    className={`w-full text-left px-2 py-2.5 rounded-lg transition-all border shrink-0
+                      ${activeIndex === index 
+                        ? `${item.bg} ${item.border} ${item.color} shadow-md` 
+                        : 'bg-transparent border-transparent text-slate-400 opacity-80'
+                      }
+                    `}
+                  >
+                    {/* 直接渲染 titleZh，保留“分子间势能”等全称 */}
+                    <div className="font-bold text-[12px] md:text-[13px] leading-tight">{item.titleZh}</div>
+                  </button>
+                ))}
+              </nav>
+
+              <div className="flex-1 flex flex-col max-w-[320px] md:max-w-[400px] border-r border-slate-800 bg-slate-950/30 overflow-y-auto p-4 pb-12 relative">
+                
+                <h2 className={`text-xl md:text-2xl font-extrabold tracking-tight mb-1 ${activeData.color}`}>
+                   {activeData.titleZh}
+                </h2>
+                <div className="text-[10px] md:text-xs text-slate-500 mb-4 opacity-80 font-mono">{activeData.titleEn}</div>
+
+                {['translational', 'rotational', 'vibrational'].includes(activeData.id) && (
+                   <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-sm shrink-0 mb-4">
+                      <div className="flex justify-between items-end text-xs text-slate-300 mb-1">
+                         <span className="font-bold">系统温度 (T)</span>
+                         <span className="font-mono text-amber-400 font-bold">{temperature} K</span>
+                      </div>
+                      <input type="range" min="0" max="1000" step="10" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} 
+                         className="w-full accent-amber-500 mt-1" />
+                   </div>
+                )}
+
+                <div className={`inline-flex items-center gap-1.5 w-fit px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 border border-slate-800 mb-3 ${activeData.color}`}>
+                   <span>⚡</span>
+                   <span className="font-mono">{activeData.magnitude}</span>
+                </div>
+
+                <div className="text-[13px] md:text-[14px] leading-relaxed text-slate-300 mb-4">
+                   {activeData.description}
+                </div>
+
+                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
+                   <div className={`text-base font-serif ${activeData.color} text-center flex items-center justify-center font-bold tracking-wide`}>
+                      {activeData.formula}
+                   </div>
+                </div>
+
+                {activeData.thermoNote && (
+                   <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] md:text-[11px] text-slate-500 leading-normal">
+                      * <b>注：</b>{activeData.thermoNote}
+                   </div>
+                )}
+              </div>
+
+              <div className="flex-1 relative flex items-center justify-center bg-[#0f172a] p-1">
+                 <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10rem] font-black opacity-[0.03] pointer-events-none tracking-tighter ${activeData.color}`}>
+                    H₂O
+                 </div>
+                 
+                 <div className="w-full h-full flex flex-col z-10">
+                    {renderVisualizer()}
+                 </div>
+              </div>
+
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
 </html>
