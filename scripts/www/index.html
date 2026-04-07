@@ -42,17 +42,26 @@
             pointer-events: none; letter-spacing: 3px; z-index: 200;
         }
 
-        .top-eq-panel { position: absolute; top: 55px; left: 20px; padding: 8px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 240px; }
-        .eq-title { font-size: 0.85rem; font-weight: 600; color: #8ab4f8; margin:0; }
-        .eq-content { font-size: 0.8rem; font-family: monospace; font-weight: bold; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; }
-
         .left-legend { position: absolute; left: 20px; top: 60%; transform: translateY(-50%); padding: 10px 8px; display: flex; flex-direction: column; gap: 8px; }
         .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; color: #b2c7d6; font-weight: 500; }
-        .cpk-icon { width: 20px; height: 20px; position: relative; display: flex; align-items: center; justify-content: center; transform: scale(0.75); }
+        
+        /* 扩展了图例容器大小，防止原子重叠 */
+        .cpk-icon { width: 28px; height: 28px; position: relative; display: flex; align-items: center; justify-content: center; transform: scale(0.85); }
         .atom { border-radius: 50%; position: absolute; box-shadow: inset -2px -2px 5px rgba(0,0,0,0.5), inset 1px 1px 3px rgba(255,255,255,0.6), 1px 1px 2px rgba(0,0,0,0.4); }
         .atom-h { width: 12px; height: 12px; background: #e0e0e0; }
         .atom-o { width: 18px; height: 18px; background: #dd1111; }
-        .cpk-h2o .atom-o { top: 2px; left: 5px; z-index: 2; } .cpk-h2o .atom-h:nth-child(2) { left: 2px; top: 14px; z-index: 1; } .cpk-h2o .atom-h:nth-child(3) { right: 2px; top: 14px; z-index: 1; }
+        
+        /* 水分子 (H₂O) - 经典米老鼠形状（两端分开） */
+        .cpk-h2o .atom-o { top: 2px; left: 5px; z-index: 2; } 
+        .cpk-h2o .atom-h:nth-child(2) { left: -2px; top: 14px; z-index: 1; } 
+        .cpk-h2o .atom-h:nth-child(3) { left: 16px; top: 14px; z-index: 1; }
+        
+        /* 氢离子 (H⁺) - 单个质子居中 */
+        .cpk-h .atom-h { top: 8px; left: 8px; z-index: 1; }
+        
+        /* 氢氧根离子 (OH⁻) - 哑铃形平躺连结 */
+        .cpk-oh .atom-o { top: 5px; left: 2px; z-index: 2; } 
+        .cpk-oh .atom-h:nth-child(2) { left: 18px; top: 10px; z-index: 1; }
 
         .top-right-chart { position: absolute; top: 15px; right: 15px; padding: 10px; display: none; flex-direction: column; align-items: center; gap: 5px; }
         .chart-title { font-size: 0.65rem; color: #a1b0c0; }
@@ -109,16 +118,11 @@
 <div class="ui-layer">
     <div class="top-left-title">电解水</div>
 
-    <div class="glass-panel top-eq-panel interactive-ui" id="eqPanel">
-        <div class="eq-title" id="eqTitle">等待通电...</div>
-        <div class="eq-content" id="eqTotal" style="color:#ffffff; display:none;">总反应: -</div>
-        <div class="eq-content" id="eqCathode" style="color:#a8c7fa; display:none;">阴极: -</div>
-        <div class="eq-content" id="eqAnode" style="color:#f28b82; display:none;">阳极: -</div>
-    </div>
-
     <div class="glass-panel left-legend interactive-ui">
         <div class="legend-item"><div class="cpk-icon cpk-h2o"><div class="atom atom-o"></div><div class="atom atom-h"></div><div class="atom atom-h"></div></div> H₂O</div>
-        <div class="legend-item"><span style="width:8px;height:8px;background:#fc0;border-radius:50%;box-shadow:0 0 5px #fc0;margin:0 6px;"></span> e⁻ (宏观电子流)</div>
+        <div class="legend-item"><div class="cpk-icon cpk-h"><div class="atom atom-h"></div></div> H⁺</div>
+        <div class="legend-item"><div class="cpk-icon cpk-oh"><div class="atom atom-o"></div><div class="atom atom-h"></div></div> OH⁻</div>
+        <div class="legend-item"><span style="width:8px;height:8px;background:#fc0;border-radius:50%;box-shadow:0 0 5px #fc0;margin:0 6px;"></span> e⁻</div>
     </div>
 
     <div class="glass-panel top-right-chart interactive-ui" id="gasChart">
@@ -186,10 +190,6 @@ function initApp() {
     const mouse = new THREE.Vector2();
 
     const powerBtn = document.getElementById('powerBtn');
-    const eqTitle = document.getElementById('eqTitle');
-    const eqTotal = document.getElementById('eqTotal'); 
-    const eqCathode = document.getElementById('eqCathode');
-    const eqAnode = document.getElementById('eqAnode');
     const gasChart = document.getElementById('gasChart');
     const barH2 = document.getElementById('barH2');
     const barO2 = document.getElementById('barO2');
@@ -369,23 +369,6 @@ function initApp() {
         if(duration > 0) { window.toastTimeout = setTimeout(() => { new TWEEN.Tween(toast.style).to({opacity: 0}, 500).onComplete(() => toast.style.display = 'none').start(); }, duration); }
     }
 
-    function updateEquation() {
-        if (!experimentActive && gasAnode < MAX_GAS) { 
-            eqTitle.textContent = "等待通电..."; 
-            eqTotal.style.display = 'none';
-            eqCathode.style.display = 'none'; 
-            eqAnode.style.display = 'none'; 
-            return; 
-        }
-        eqTitle.textContent = "⚡ 反应方程式"; 
-        eqTotal.style.display = 'block';
-        eqCathode.style.display = 'block'; 
-        eqAnode.style.display = 'block';
-        eqTotal.innerHTML = "总反应: 2H₂O → 2H₂↑ + O₂↑ (通电)";
-        eqCathode.innerHTML = "阴极: 4H⁺ + 4e⁻ = 2H₂↑"; 
-        eqAnode.innerHTML = "阳极: 4OH⁻ - 4e⁻ = 2H₂O + O₂↑";
-    }
-
     btnViewToggle.addEventListener('click', () => {
         isMicroView = !isMicroView;
         btnViewToggle.innerHTML = isMicroView ? "🔋 宏观" : "🔍 微观";
@@ -401,7 +384,6 @@ function initApp() {
         powerBtn.className = experimentActive ? 'power-btn' : 'power-btn off';
         powerBtn.textContent = experimentActive ? "🚫 断电" : "⚡ 通电";
         powerLed.material.color.setHex(experimentActive ? 0x00ff00 : 0x333333);
-        updateEquation();
     });
 
     btnPause.addEventListener('click', () => { isPaused = !isPaused; btnPause.classList.toggle('active-pause'); });
@@ -426,7 +408,6 @@ function initApp() {
         testActions.style.display = 'none'; toast.style.display = 'none';
         btnTestH2.style.display = 'block'; btnTestO2.style.display = 'block';
 
-        updateEquation();
         bubbles.forEach(b => b.active = false); 
         isPaused = false; btnPause.classList.remove('active-pause');
         isSlowMo = false; btnSlow.classList.remove('active-slow');
