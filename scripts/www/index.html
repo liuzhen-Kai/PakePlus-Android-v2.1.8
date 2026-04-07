@@ -1,11 +1,656 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D 电解水史诗仿真实验 - 宏观电子流版</title>
+    
+    <style>
+        /* ==================== 架构第一步 - 极速骨架屏 ==================== */
+        #loadingScreen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #0a0f16;
+            z-index: 99999; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: #ffffff; transition: opacity 0.6s ease; 
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #8ab4f8; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        .loading-text { font-size: 16px; letter-spacing: 2px; font-family: 'Segoe UI', sans-serif; color: #b2c7d6; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ==================== 基础与UI样式 ==================== */
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #0a0f16; margin: 0; padding: 0; overflow: hidden; width: 100vw; height: 100vh; }
+        #canvas3d { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+        
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+        .interactive-ui { pointer-events: auto; }
+
+        .glass-panel {
+            background: rgba(18, 28, 38, 0.55); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            border-radius: 12px; color: #f0e9d8;
+        }
+
+        .top-left-title {
+            position: absolute; top: 15px; left: 20px; font-size: 24px; font-weight: 800;
+            color: #f8fafc; text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            pointer-events: none; letter-spacing: 3px; z-index: 200;
+        }
+
+        .top-eq-panel { position: absolute; top: 55px; left: 20px; padding: 8px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 240px; }
+        .eq-title { font-size: 0.85rem; font-weight: 600; color: #8ab4f8; margin:0; }
+        .eq-content { font-size: 0.8rem; font-family: monospace; font-weight: bold; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; }
+
+        .left-legend { position: absolute; left: 20px; top: 60%; transform: translateY(-50%); padding: 10px 8px; display: flex; flex-direction: column; gap: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; color: #b2c7d6; font-weight: 500; }
+        .cpk-icon { width: 20px; height: 20px; position: relative; display: flex; align-items: center; justify-content: center; transform: scale(0.75); }
+        .atom { border-radius: 50%; position: absolute; box-shadow: inset -2px -2px 5px rgba(0,0,0,0.5), inset 1px 1px 3px rgba(255,255,255,0.6), 1px 1px 2px rgba(0,0,0,0.4); }
+        .atom-h { width: 12px; height: 12px; background: #e0e0e0; }
+        .atom-o { width: 18px; height: 18px; background: #dd1111; }
+        .cpk-h2o .atom-o { top: 2px; left: 5px; z-index: 2; } .cpk-h2o .atom-h:nth-child(2) { left: 2px; top: 14px; z-index: 1; } .cpk-h2o .atom-h:nth-child(3) { right: 2px; top: 14px; z-index: 1; }
+
+        .top-right-chart { position: absolute; top: 15px; right: 15px; padding: 10px; display: none; flex-direction: column; align-items: center; gap: 5px; }
+        .chart-title { font-size: 0.65rem; color: #a1b0c0; }
+        .bars-container { display: flex; align-items: flex-end; gap: 15px; height: 60px; width: 60px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 2px; }
+        .bar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; width: 20px;}
+        .bar { width: 14px; border-radius: 3px 3px 0 0; transition: height 0.1s linear; }
+        .bar-h2 { background: #e0e0e0; box-shadow: 0 0 8px rgba(255,255,255,0.5); }
+        .bar-o2 { background: #dd1111; box-shadow: 0 0 8px rgba(221,17,17,0.5); }
+        .bar-label { font-size: 0.6rem; font-weight: bold; margin-top: 4px; }
+
+        .right-camera-tools { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); padding: 8px; display: flex; flex-direction: column; gap: 12px; }
+        .tool-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .tool-btn:active { transform: scale(0.9); }
+
+        .bottom-dock { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); padding: 8px 12px; display: flex; gap: 8px; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 95vw; }
+        
+        .time-btn { background: rgba(50, 150, 255, 0.2); border: 1px solid rgba(50, 150, 255, 0.4); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; transition: all 0.2s;}
+        .time-btn.active-slow { background: #3296ff; }
+        .time-btn.active-pause { background: #e67e22; border-color: #d35400; }
+        .btn-reset { background: rgba(231, 76, 60, 0.2); border-color: rgba(231, 76, 60, 0.4); }
+
+        .power-btn { background: #e74c3c; border: 1px solid #ff7b6b; color: white; font-size: 0.8rem; font-weight: bold; padding: 6px 16px; border-radius: 16px; cursor: pointer; flex-shrink: 0; box-shadow: 0 0 15px rgba(231,76,60,0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.5); transition: all 0.2s;}
+        .power-btn:active { transform: scale(0.95); }
+        .power-btn.off { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); box-shadow: none; color: #aaa; }
+
+        /* 气体检验特有 UI */
+        #test-actions { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); display: none; gap: 20px; z-index: 100; }
+        #toast { position: absolute; top: 25%; left: 50%; transform: translate(-50%, -50%); padding: 15px 30px; font-size: 1.2rem; font-weight: bold; color: #fff; display: none; z-index: 1000; box-shadow: 0 0 20px rgba(56, 189, 248, 0.8); border: 2px solid #38bdf8; text-align: center; pointer-events: none;}
+    </style>
+
+    <!-- ==================== 架构第二步 - 纯净版双保险注入 ==================== -->
+    <script 
+        src="./js/three.min.js" 
+        onerror="var s=document.createElement('script');s.async=false;s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';document.head.appendChild(s);">
+    </script>
+    <script 
+        src="./js/OrbitControls.js" 
+        onerror="var s=document.createElement('script');s.async=false;s.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js';document.head.appendChild(s);">
+    </script>
+    <script 
+        src="./js/tween.umd.js" 
+        onerror="var s=document.createElement('script');s.async=false;s.src='https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js';document.head.appendChild(s);">
+    </script>
+</head>
+<body>
+
+<div id="canvas3d"></div>
+
+<div id="loadingScreen">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-msg">3D 引擎初始化中...</div>
+</div>
+
+<div class="ui-layer">
+    <div class="top-left-title">电解水</div>
+
+    <div class="glass-panel top-eq-panel interactive-ui" id="eqPanel">
+        <div class="eq-title" id="eqTitle">等待通电...</div>
+        <div class="eq-content" id="eqTotal" style="color:#ffffff; display:none;">总反应: -</div>
+        <div class="eq-content" id="eqCathode" style="color:#a8c7fa; display:none;">阴极: -</div>
+        <div class="eq-content" id="eqAnode" style="color:#f28b82; display:none;">阳极: -</div>
+    </div>
+
+    <div class="glass-panel left-legend interactive-ui">
+        <div class="legend-item"><div class="cpk-icon cpk-h2o"><div class="atom atom-o"></div><div class="atom atom-h"></div><div class="atom atom-h"></div></div> H₂O</div>
+        <div class="legend-item"><span style="width:8px;height:8px;background:#fc0;border-radius:50%;box-shadow:0 0 5px #fc0;margin:0 6px;"></span> e⁻ (宏观电子流)</div>
+    </div>
+
+    <div class="glass-panel top-right-chart interactive-ui" id="gasChart">
+        <div class="chart-title">产气量体积比</div>
+        <div class="bars-container">
+            <div class="bar-wrapper"><div class="bar bar-h2" id="barH2" style="height: 0%;"></div><div class="bar-label" style="color:#fff;">H₂</div></div>
+            <div class="bar-wrapper"><div class="bar bar-o2" id="barO2" style="height: 0%;"></div><div class="bar-label" style="color:#f88;">O₂</div></div>
+        </div>
+    </div>
+
+    <div id="test-actions" class="interactive-ui">
+        <button class="power-btn" id="btnTestH2" style="background:#38bdf8; border-color:#0284c7;">🔥 取出检验氢气</button>
+        <button class="power-btn" id="btnTestO2" style="background:#f87171; border-color:#dc2626;">🪵 取出检验氧气</button>
+    </div>
+
+    <div id="toast" class="glass-panel interactive-ui"></div>
+
+    <div class="right-camera-tools interactive-ui">
+        <div class="tool-btn" id="camGlobal">🌍</div>
+        <div class="tool-btn" id="camCathode">➖</div>
+        <div class="tool-btn" id="camAnode">➕</div>
+    </div>
+
+    <div class="glass-panel bottom-dock interactive-ui">
+        <div style="color:#c0cedc; font-size: 0.8rem; font-weight: bold; margin: 0 5px;">控制:</div>
+        <button class="time-btn" id="btnViewToggle" style="width: auto; padding: 0 15px; border-radius: 16px;">🔍 微观</button>
+        <div class="divider" style="width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+        <div class="time-btn" id="btnSlow">🐌</div>
+        <div class="time-btn" id="btnPause">⏸️</div>
+        <div class="time-btn btn-reset" id="btnReset">🔄</div>
+        <div class="divider" style="width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+        <div class="power-btn off" id="powerBtn">⚡ 通电</div>
+    </div>
+</div>
+
+<script>
+function initApp() {
+    if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined' || typeof TWEEN === 'undefined') {
+        document.getElementById('loading-msg').innerText = '正在获取资源包 (CDN兜底中)...';
+        setTimeout(initApp, 50);
+        return;
+    }
+
+    document.getElementById('loading-msg').innerText = '正在构建科学实验室...';
+
+    // --- 核心状态 ---
+    let experimentActive = false;
+    let isPaused = false;
+    let isSlowMo = false;
+    let showedTestUI = false;
+    let isMicroView = false; 
+    const speedScale = 0.3; 
+    
+    let targetCamPos = new THREE.Vector3(0, 15, 35);
+    let targetLookAt = new THREE.Vector3(0, 3, 0);
+    let isAutoCamera = false; 
+
+    let gasCathode = 0; let gasAnode = 0; const MAX_GAS = 100;
+
+    let testMode = 'none'; 
+    let dragObj = null;
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -5); 
+    const dragOffset = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const powerBtn = document.getElementById('powerBtn');
+    const eqTitle = document.getElementById('eqTitle');
+    const eqTotal = document.getElementById('eqTotal'); 
+    const eqCathode = document.getElementById('eqCathode');
+    const eqAnode = document.getElementById('eqAnode');
+    const gasChart = document.getElementById('gasChart');
+    const barH2 = document.getElementById('barH2');
+    const barO2 = document.getElementById('barO2');
+    const btnPause = document.getElementById('btnPause');
+    const btnSlow = document.getElementById('btnSlow');
+    const btnReset = document.getElementById('btnReset');
+    const btnViewToggle = document.getElementById('btnViewToggle');
+    const testActions = document.getElementById('test-actions');
+    const btnTestH2 = document.getElementById('btnTestH2');
+    const btnTestO2 = document.getElementById('btnTestO2');
+    const toast = document.getElementById('toast');
+
+    // --- Three.js 初始化 ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0f16, 0.015);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.copy(targetCamPos);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.localClippingEnabled = true;
+    document.getElementById('canvas3d').appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.05;
+    controls.target.copy(targetLookAt);
+    controls.addEventListener('start', () => { isAutoCamera = false; });
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xfff0dd, 0.8); dirLight.position.set(10, 20, 10); dirLight.castShadow = true; scene.add(dirLight);
+
+    // --- 材质 ---
+    const clipPlaneLeft = new THREE.Plane(new THREE.Vector3(0, -1, 0), 11.15);
+    const clipPlaneRight = new THREE.Plane(new THREE.Vector3(0, -1, 0), 11.15);
+
+    const materials = {
+        glass: new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.9, opacity: 1, transparent: true, roughness: 0.05, ior: 1.5, side: THREE.DoubleSide, depthWrite: false }),
+        waterBase: new THREE.MeshPhysicalMaterial({ color: 0x88ccff, transmission: 0, opacity: 0.35, transparent: true, roughness: 0.1, depthWrite: false }),
+        waterTube: new THREE.MeshPhysicalMaterial({ color: 0x88ccff, transmission: 0, opacity: 0.35, transparent: true, roughness: 0.1, depthWrite: false, side: THREE.DoubleSide }),
+        electrode: new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 }),
+        wood: new THREE.MeshStandardMaterial({ color: 0x8b5a2b }),
+        ember: new THREE.MeshBasicMaterial({ color: 0xff3300 })
+    };
+
+    const matWaterLeft = materials.waterTube.clone(); matWaterLeft.clippingPlanes = [clipPlaneLeft];
+    const matWaterRight = materials.waterTube.clone(); matWaterRight.clippingPlanes = [clipPlaneRight];
+    const matWaterSurface = materials.waterTube.clone();
+
+    // --- 场景道具搭建 ---
+    const apparatus = new THREE.Group(); scene.add(apparatus);
+    const table = new THREE.Mesh(new THREE.BoxGeometry(45, 1, 35), new THREE.MeshStandardMaterial({ color: 0x2a3036, roughness: 0.9 })); table.position.y = -0.5; apparatus.add(table);
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(16, 8, 10), materials.glass); tank.position.y = 4; apparatus.add(tank);
+    const liquidMesh = new THREE.Mesh(new THREE.BoxGeometry(15.6, 7, 9.6), materials.waterBase); liquidMesh.position.y = 3.7; apparatus.add(liquidMesh);
+
+    const cathode = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8), materials.electrode); cathode.position.set(-4, 5, 0); apparatus.add(cathode);
+    const anode = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8), materials.electrode); anode.position.set(4, 5, 0); apparatus.add(anode);
+
+    const tubeLAssy = new THREE.Group(); tubeLAssy.position.set(-4, 6, 0); apparatus.add(tubeLAssy);
+    const tubeRAssy = new THREE.Group(); tubeRAssy.position.set(4, 6, 0); apparatus.add(tubeRAssy);
+    
+    const tL = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 8, 16, 1, true), materials.glass); tL.position.y = 0; 
+    const tLTop = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16, 0, Math.PI*2, 0, Math.PI/2), materials.glass); tLTop.position.y = 4; tL.add(tLTop); tubeLAssy.add(tL);
+    const hitBoxL = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 10), new THREE.MeshBasicMaterial({visible: false})); tubeLAssy.add(hitBoxL);
+    
+    const tR = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 8, 16, 1, true), materials.glass); tR.position.y = 0; 
+    const tRTop = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16, 0, Math.PI*2, 0, Math.PI/2), materials.glass); tRTop.position.y = 4; tR.add(tRTop); tubeRAssy.add(tR);
+
+    const waterPoints = [];
+    waterPoints.push(new THREE.Vector2(0, 0), new THREE.Vector2(1.1, 0), new THREE.Vector2(1.1, 8));
+    for (let i = 1; i <= 16; i++) { const th = (i/16)*(Math.PI/2); waterPoints.push(new THREE.Vector2(1.1*Math.cos(th), 8+1.15*Math.sin(th))); }
+    const wGeo = new THREE.LatheGeometry(waterPoints, 32);
+    
+    const wL = new THREE.Mesh(wGeo, matWaterLeft); wL.position.set(-4, 2, 0); apparatus.add(wL);
+    const wR = new THREE.Mesh(wGeo, matWaterRight); wR.position.set(4, 2, 0); apparatus.add(wR);
+    const surfaceLeft = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI/2), matWaterSurface); surfaceLeft.position.x = -4; apparatus.add(surfaceLeft);
+    const surfaceRight = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI/2), matWaterSurface); surfaceRight.position.x = 4; apparatus.add(surfaceRight);
+
+    // ========== 直流电源与导线系统 ==========
+    const psGroup = new THREE.Group(); psGroup.position.set(0, 14, 0); apparatus.add(psGroup);
+    const psBody = new THREE.Mesh(new THREE.BoxGeometry(9, 3.5, 3.5), new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.4, roughness: 0.7 })); psGroup.add(psBody);
+    const psPanel = new THREE.Mesh(new THREE.BoxGeometry(8.8, 3.3, 0.1), new THREE.MeshStandardMaterial({ color: 0x111111 })); psPanel.position.set(0, 0, 1.76); psGroup.add(psPanel);
+    const screenCanvas = document.createElement('canvas'); screenCanvas.width = 256; screenCanvas.height = 128; const screenCtx = screenCanvas.getContext('2d');
+    const screenTex = new THREE.CanvasTexture(screenCanvas); const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.2), new THREE.MeshBasicMaterial({ map: screenTex })); screenMesh.position.set(0, 0, 1.82); psGroup.add(screenMesh);
+    function updateAmmeter(val, active) {
+        screenCtx.fillStyle = '#0a0a0a'; screenCtx.fillRect(0, 0, 256, 128);
+        screenCtx.fillStyle = active ? '#00ff00' : '#223322'; screenCtx.font = 'bold 64px monospace'; screenCtx.textAlign = 'center'; screenCtx.textBaseline = 'middle'; screenCtx.fillText(val.toFixed(2) + ' A', 128, 64);
+        screenTex.needsUpdate = true;
+    }
+    updateAmmeter(0.00, false);
+    const powerLed = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), new THREE.MeshBasicMaterial({ color: 0x333333 })); powerLed.position.set(-3.8, 1.2, 1.82); psGroup.add(powerLed);
+    
+    // **导线的精准贝塞尔曲线，电子将沿此曲线运动**
+    const curveBotNeg = new THREE.CatmullRomCurve3([new THREE.Vector3(-3.5, 12.2, 0.5), new THREE.Vector3(-4, 11.5, -1.8), new THREE.Vector3(-4, 4, -1.8), new THREE.Vector3(-4, 1, -1), new THREE.Vector3(-4, 1, 0)]);
+    const wireNeg = new THREE.Mesh(new THREE.TubeGeometry(curveBotNeg, 40, 0.12, 8, false), new THREE.MeshStandardMaterial({ color: 0x222222 })); apparatus.add(wireNeg);
+    
+    const curveBotPos = new THREE.CatmullRomCurve3([new THREE.Vector3(3.5, 12.2, 0.5), new THREE.Vector3(4, 11.5, -1.8), new THREE.Vector3(4, 4, -1.8), new THREE.Vector3(4, 1, -1), new THREE.Vector3(4, 1, 0)]);
+    const wirePos = new THREE.Mesh(new THREE.TubeGeometry(curveBotPos, 40, 0.12, 8, false), new THREE.MeshStandardMaterial({ color: 0xaa2222 })); apparatus.add(wirePos);
+
+    // --- 检验道具 ---
+    const lamp = new THREE.Group(); lamp.position.set(12, 0, 5); 
+    const lampBody = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.8, 2, 16), new THREE.MeshPhysicalMaterial({color:0xffffff, transmission:0.9, opacity:1, transparent:true}));
+    lampBody.position.y = 1; lamp.add(lampBody);
+    const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.5), new THREE.MeshStandardMaterial({color: 0x333333})); wick.position.y = 2.1; lamp.add(wick);
+    const lampFlame = new THREE.Sprite(new THREE.SpriteMaterial({map: createFlameTexture(), color: 0xffffff, blending: THREE.AdditiveBlending})); lampFlame.scale.set(2, 3, 2); lampFlame.position.y = 3.0; lamp.add(lampFlame);
+    scene.add(lamp);
+
+    const stick = new THREE.Group(); 
+    const stickBody = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 6), materials.wood); stick.add(stickBody);
+    const hitBoxStick = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 8), new THREE.MeshBasicMaterial({visible: false})); stick.add(hitBoxStick);
+    const emb = new THREE.Mesh(new THREE.SphereGeometry(0.15), materials.ember); emb.position.y = -3; stick.add(emb);
+    const stickFlame = new THREE.Sprite(new THREE.SpriteMaterial({map: createFlameTexture(), color: 0xffffff, blending: THREE.AdditiveBlending})); 
+    stickFlame.scale.set(0.01, 0.01, 0.01); stickFlame.position.y = -2.8; stick.add(stickFlame);
+    stick.visible = false; scene.add(stick);
+
+    // --- 粒子系统 ---
+    const bubbles = []; const electronPulses = []; const ions = [];
+    
+    function buildMolecule(type) { const group = new THREE.Group(); const hMat = new THREE.MeshStandardMaterial({ color: 0xffffff }); const hGeo = new THREE.SphereGeometry(0.12, 16, 16); if (type === 'H2') { const h1 = new THREE.Mesh(hGeo, hMat); h1.position.set(0.09, 0, 0); const h2 = h1.clone(); h2.position.set(-0.09, 0, 0); group.add(h1, h2); } else if (type === 'O2') { const o = new THREE.Mesh(new THREE.SphereGeometry(0.16,16,16), new THREE.MeshStandardMaterial({color:0xdd1111})); const o1 = o.clone(); o1.position.set(0.12, 0, 0); const o2 = o.clone(); o2.position.set(-0.12, 0, 0); group.add(o1, o2); } else if (type === 'H') { group.add(new THREE.Mesh(hGeo, hMat)); } else if (type === 'OH') { const o = new THREE.Mesh(new THREE.SphereGeometry(0.16,16,16), new THREE.MeshStandardMaterial({color:0xdd1111})); const h = new THREE.Mesh(hGeo, hMat); h.position.set(0, -0.16, 0); group.add(o, h); } else if (type === 'H2O') { const o = new THREE.Mesh(new THREE.SphereGeometry(0.16,16,16), new THREE.MeshStandardMaterial({color:0xdd1111})); const h1 = new THREE.Mesh(hGeo, hMat); h1.position.set(0.13, -0.1, 0); const h2 = new THREE.Mesh(hGeo, hMat); h2.position.set(-0.13, -0.1, 0); group.add(o, h1, h2); } return group; }
+    
+    // ==========================================
+    // 💡 全新升级：宏观导线电子流系统生成
+    // ==========================================
+    function createElectronTexture() { 
+        const c = document.createElement('canvas'); c.width = 64; c.height = 64; const ctx = c.getContext('2d'); 
+        const g = ctx.createRadialGradient(32,32,0, 32,32,32); 
+        g.addColorStop(0, '#ffffff'); 
+        g.addColorStop(0.2, '#ffcc00'); // 金黄色发光核心
+        g.addColorStop(1, 'rgba(0,0,0,0)'); 
+        ctx.fillStyle = g; ctx.fillRect(0,0,64,64); 
+        return new THREE.CanvasTexture(c); 
+    }
+    const texElectron = createElectronTexture();
+    
+    // 生成100个电子，包含导线运动与电极聚集两种状态
+    for(let i=0; i<100; i++) { 
+        // 关闭深度测试(depthTest: false)并设置较高渲染层级，防止被导线管体遮盖
+        const el = new THREE.Sprite(new THREE.SpriteMaterial({ 
+            map: texElectron, 
+            blending: THREE.AdditiveBlending, 
+            transparent: true,
+            depthTest: false,
+            depthWrite: false
+        })); 
+        el.scale.set(0.6, 0.6, 0.6); // 稍微调整电子体积，聚集时更美观
+        el.renderOrder = 999; // 强制在最顶层渲染
+        el.visible = false; 
+        scene.add(el); 
+        
+        // 均匀分布状态，加入专属电极运动参数
+        electronPulses.push({ 
+            mesh: el, 
+            type: i < 50 ? 'neg' : 'pos',
+            state: Math.random() > 0.4 ? 'wire' : 'rod', // 初始状态(导线/碳棒)随机分配
+            t: Math.random(), 
+            gatherLife: Math.random(), // 聚集状态的生命周期 (0~1)
+            rodAngle: Math.random() * Math.PI * 2, // 环绕电极的角度
+            rodY: 1.5 + Math.random() * 4.5 // 在电极上的高度
+        }); 
+    }
+
+    // 生成气泡和离子...
+    for(let i=0; i<180; i++) { const bg = new THREE.Group(); const models = { 'H2': buildMolecule('H2'), 'O2': buildMolecule('O2') }; Object.values(models).forEach(m => bg.add(m)); bg.visible = false; scene.add(bg); bubbles.push({ group: bg, models: models, active: false, side: 0, isEscaping: false }); }
+    for(let i=0; i<80; i++) {
+        const ionGroup = new THREE.Group(); const models = { 'H': buildMolecule('H'), 'OH': buildMolecule('OH'), 'H2O': buildMolecule('H2O') };
+        Object.values(models).forEach(m => ionGroup.add(m)); ionGroup.visible = false; scene.add(ionGroup);
+        const r = Math.random(); const type = r < 0.4 ? 'H' : (r < 0.8 ? 'OH' : 'H2O');
+        ions.push({ group: ionGroup, models: models, type: type, active: true, x: (Math.random() - 0.5) * 14, y: 2 + Math.random() * 5, z: (Math.random() - 0.5) * 8, vx: (Math.random()-0.5)*0.02, vy: (Math.random()-0.5)*0.02, vz: (Math.random()-0.5)*0.02, rvx: (Math.random()-0.5)*0.1, rvy: (Math.random()-0.5)*0.1, rvz: (Math.random()-0.5)*0.1 });
+    }
+
+    // --- 工具函数 ---
+    function createFlameTexture() { const c = document.createElement('canvas'); c.width = 64; c.height = 64; const ctx = c.getContext('2d'); const g = ctx.createRadialGradient(32,32,0, 32,32,32); g.addColorStop(0, '#fff'); g.addColorStop(0.2, '#fc0'); g.addColorStop(0.6, 'rgba(255, 50, 0, 0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); }
+    function playPopSound() { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; const ctx = new AC(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(1200, ctx.currentTime); o.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.15); g.gain.setValueAtTime(1, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15); o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.15); }
+    function showToast(m, duration = 4000) { 
+        toast.innerHTML = m; toast.style.display = 'block'; toast.style.opacity = 1; 
+        if (window.toastTimeout) clearTimeout(window.toastTimeout);
+        if(duration > 0) { window.toastTimeout = setTimeout(() => { new TWEEN.Tween(toast.style).to({opacity: 0}, 500).onComplete(() => toast.style.display = 'none').start(); }, duration); }
+    }
+
+    function updateEquation() {
+        if (!experimentActive && gasAnode < MAX_GAS) { 
+            eqTitle.textContent = "等待通电..."; 
+            eqTotal.style.display = 'none';
+            eqCathode.style.display = 'none'; 
+            eqAnode.style.display = 'none'; 
+            return; 
+        }
+        eqTitle.textContent = "⚡ 反应方程式"; 
+        eqTotal.style.display = 'block';
+        eqCathode.style.display = 'block'; 
+        eqAnode.style.display = 'block';
+        eqTotal.innerHTML = "总反应: 2H₂O → 2H₂↑ + O₂↑ (通电)";
+        eqCathode.innerHTML = "阴极: 4H⁺ + 4e⁻ = 2H₂↑"; 
+        eqAnode.innerHTML = "阳极: 4OH⁻ - 4e⁻ = 2H₂O + O₂↑";
+    }
+
+    btnViewToggle.addEventListener('click', () => {
+        isMicroView = !isMicroView;
+        btnViewToggle.innerHTML = isMicroView ? "🔋 宏观" : "🔍 微观";
+        btnViewToggle.style.background = isMicroView ? "rgba(167, 139, 250, 0.2)" : "rgba(50, 150, 255, 0.2)";
+        btnViewToggle.style.borderColor = isMicroView ? "rgba(167, 139, 250, 0.4)" : "rgba(50, 150, 255, 0.4)";
+        const op = isMicroView ? 0.15 : 0.35;
+        materials.waterBase.opacity = op; matWaterLeft.opacity = op; matWaterRight.opacity = op; matWaterSurface.opacity = op;
+    });
+
+    powerBtn.addEventListener('click', () => {
+        if(gasAnode >= MAX_GAS) return;
+        experimentActive = !experimentActive;
+        powerBtn.className = experimentActive ? 'power-btn' : 'power-btn off';
+        powerBtn.textContent = experimentActive ? "🚫 断电" : "⚡ 通电";
+        powerLed.material.color.setHex(experimentActive ? 0x00ff00 : 0x333333);
+        updateEquation();
+    });
+
+    btnPause.addEventListener('click', () => { isPaused = !isPaused; btnPause.classList.toggle('active-pause'); });
+    btnSlow.addEventListener('click', () => { isSlowMo = !isSlowMo; btnSlow.classList.toggle('active-slow'); });
+    
+    btnReset.addEventListener('click', () => {
+        TWEEN.removeAll();
+        experimentActive = false; showedTestUI = false; testMode = 'none'; dragObj = null;
+        powerBtn.className = 'power-btn off'; powerBtn.textContent = "⚡ 通电";
+        powerLed.material.color.setHex(0x333333); updateAmmeter(0.00, false);
+        gasCathode = 0; gasAnode = 0; 
+        clipPlaneLeft.constant = 11.15; clipPlaneRight.constant = 11.15;
+        document.body.style.cursor = 'default';
+        
+        tubeLAssy.children.forEach(c => { if(c.isClone) tubeLAssy.remove(c); });
+        tubeLAssy.position.set(-4, 6, 0); tubeLAssy.rotation.set(0, 0, 0);
+        tubeRAssy.children.forEach(c => { if(c.isClone) tubeRAssy.remove(c); });
+        tubeRAssy.position.set(4, 6, 0); tubeRAssy.rotation.set(0, 0, 0);
+        wL.visible = true; wR.visible = true;
+        
+        stick.visible = false; stickFlame.scale.set(0.01, 0.01, 0.01);
+        testActions.style.display = 'none'; toast.style.display = 'none';
+        btnTestH2.style.display = 'block'; btnTestO2.style.display = 'block';
+
+        updateEquation();
+        bubbles.forEach(b => b.active = false); 
+        isPaused = false; btnPause.classList.remove('active-pause');
+        isSlowMo = false; btnSlow.classList.remove('active-slow');
+        isAutoCamera = true; targetCamPos.set(0, 15, 35); targetLookAt.set(0, 3, 0);
+    });
+
+    btnTestH2.addEventListener('click', () => {
+        btnTestH2.style.display = 'none'; targetCamPos.set(8, 12, 30); targetLookAt.set(8, 6, 5); isAutoCamera = true;
+        wL.visible = false; const wL_clone = wL.clone(); wL_clone.isClone = true; wL_clone.clippingPlanes = []; tubeLAssy.add(wL_clone);
+        new TWEEN.Tween(tubeLAssy.position).to({y: 12}, 1000).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
+            new TWEEN.Tween(tubeLAssy.position).to({x: 6, z: 5}, 1000).easing(TWEEN.Easing.Quadratic.InOut).onComplete(() => {
+                testMode = 'H2_READY'; showToast("💡 提示：请亲手拖动试管，将其靠近右侧的酒精灯火焰", 0); document.body.style.cursor = 'grab';
+            }).start();
+        }).start();
+    });
+
+    btnTestO2.addEventListener('click', () => {
+        btnTestO2.style.display = 'none'; targetCamPos.set(-8, 12, 30); targetLookAt.set(-8, 8, 5); isAutoCamera = true;
+        wR.visible = false; const wR_clone = wR.clone(); wR_clone.isClone = true; wR_clone.clippingPlanes = []; tubeRAssy.add(wR_clone);
+        new TWEEN.Tween(tubeRAssy.position).to({y: 12}, 1000).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
+            const moveTween = new TWEEN.Tween(tubeRAssy.position).to({x: -8, z: 5}, 1000).easing(TWEEN.Easing.Quadratic.InOut);
+            const rotTween = new TWEEN.Tween(tubeRAssy.rotation).to({z: Math.PI}, 1000).easing(TWEEN.Easing.Quadratic.InOut);
+            moveTween.onComplete(() => {
+                stick.position.set(-12, 16, 5); stick.visible = true; 
+                testMode = 'O2_READY'; showToast("💡 提示：请亲手拖动带火星的木条，将其伸入氧气试管内", 0); document.body.style.cursor = 'grab';
+            });
+            moveTween.start(); rotTween.start();
+        }).start();
+    });
+
+    window.addEventListener('pointerdown', (e) => {
+        if(testMode === 'none' || testMode === 'H2_DONE' || testMode === 'O2_DONE') return;
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        let targets = []; if(testMode === 'H2_READY') targets.push(hitBoxL); if(testMode === 'O2_READY') targets.push(hitBoxStick);
+        const intersects = raycaster.intersectObjects(targets);
+        if(intersects.length > 0) {
+            controls.enabled = false; document.body.style.cursor = 'grabbing';
+            dragObj = testMode === 'H2_READY' ? tubeLAssy : stick;
+            let intersectPoint = new THREE.Vector3(); raycaster.ray.intersectPlane(dragPlane, intersectPoint);
+            dragOffset.copy(dragObj.position).sub(intersectPoint);
+        }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if(!dragObj) return;
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        let intersectPoint = new THREE.Vector3();
+        if(raycaster.ray.intersectPlane(dragPlane, intersectPoint)) {
+            dragObj.position.copy(intersectPoint.add(dragOffset));
+            if(testMode === 'H2_READY' && dragObj === tubeLAssy) {
+                let mouthX = tubeLAssy.position.x; let mouthY = tubeLAssy.position.y - 4; 
+                if(Math.hypot(mouthX - 12, mouthY - 3.5) < 2.0) {
+                    testMode = 'H2_DONE'; dragObj = null; controls.enabled = true; document.body.style.cursor = 'default';
+                    playPopSound();
+                    const flash = new THREE.Sprite(new THREE.SpriteMaterial({map: createFlameTexture(), color: 0xffffff, blending: THREE.AdditiveBlending}));
+                    flash.position.set(12, 3.5, 5); flash.scale.set(5, 5, 5); scene.add(flash);
+                    new TWEEN.Tween(flash.scale).to({x:12, y:12, z:12}, 150).onComplete(()=> scene.remove(flash)).start();
+                    showToast("🔊 听到尖锐的爆鸣声！证明是氢气 (H₂)", 5000);
+                }
+            } else if(testMode === 'O2_READY' && dragObj === stick) {
+                let emberX = stick.position.x; let emberY = stick.position.y - 3;
+                let mouthX = tubeRAssy.position.x; let mouthY = tubeRAssy.position.y + 4; 
+                if(Math.abs(emberX - mouthX) < 1.0 && emberY <= mouthY + 0.5 && emberY > mouthY - 4.0) {
+                    testMode = 'O2_DONE'; dragObj = null; controls.enabled = true; document.body.style.cursor = 'default';
+                    new TWEEN.Tween(stickFlame.scale).to({x:5, y:8, z:5}, 400).start();
+                    showToast("🔥 木条剧烈复燃！证明是氧气 (O₂)", 5000);
+                }
+            }
+        }
+    });
+
+    window.addEventListener('pointerup', () => { if(dragObj) { dragObj = null; controls.enabled = true; if(testMode.includes('READY')) document.body.style.cursor = 'grab'; } });
+
+    // --- 动画主循环 ---
+    function animate() {
+        requestAnimationFrame(animate); TWEEN.update();
+        if (isAutoCamera) { camera.position.lerp(targetCamPos, 0.08); controls.target.lerp(targetLookAt, 0.08); }
+        controls.update();
+
+        const dt = isPaused ? 0 : (isSlowMo ? 0.1 : 1.0);
+        const curSpeed = speedScale * dt;
+
+        if (experimentActive && gasAnode >= MAX_GAS && !showedTestUI) {
+            showedTestUI = true; experimentActive = false;
+            testActions.style.display = 'flex'; showToast("✅ 气体收集完毕，请选择您要检验的气体！", 0);
+            updateAmmeter(0, false); powerLed.material.color.setHex(0x333333);
+        }
+
+        if (experimentActive) {
+            if(gasCathode < MAX_GAS) gasCathode += 0.8 * curSpeed; else gasCathode = MAX_GAS;
+            if(gasAnode < MAX_GAS) gasAnode += 0.4 * curSpeed; else gasAnode = MAX_GAS;
+            barH2.style.height = `${gasCathode}%`; barO2.style.height = `${gasAnode}%`;
+            gasChart.style.display = 'flex'; updateAmmeter(1.95 + Math.random()*0.1, true);
+        }
+
+        // ==========================================
+        // 💡 全新升级：宏观闭合电子流渲染动画 (含减速与聚集机制)
+        // ==========================================
+        const electronSpeed = 0.004; // 减慢电子流在导线上的速率
+        const gatherSpeed = 0.008; // 控制电子在碳棒上的聚集/消散速率
+
+        electronPulses.forEach(e => { 
+            // 只有通电时才显示电子流，不仅限于微观视角，成为全局可见的宏观效果
+            if(!experimentActive) { e.mesh.visible = false; return; }
+            e.mesh.visible = true; 
+
+            if (e.type === 'neg') {
+                // 阴极(黑线)：电子从电源流出向下，并在碳棒上聚集消散
+                if (e.state === 'wire') {
+                    e.t += electronSpeed * dt; 
+                    e.mesh.material.opacity = 1;
+                    if (e.t >= 1) { // 到达碳棒末端
+                        e.state = 'rod';
+                        e.gatherLife = 1.0; // 满生命周期
+                        e.rodAngle = Math.random() * Math.PI * 2;
+                        e.rodY = 1.5 + Math.random() * 4.5;
+                    } else {
+                        e.mesh.position.copy(curveBotNeg.getPoint(e.t));
+                    }
+                } else if (e.state === 'rod') {
+                    e.gatherLife -= gatherSpeed * dt; // 逐渐消耗 (模拟参与反应)
+                    e.rodAngle += 0.05 * dt; // 环绕游走
+                    e.rodY -= 0.01 * dt; // 微微向下扩散
+                    e.mesh.position.set(-4 + Math.cos(e.rodAngle) * 0.45, e.rodY, Math.sin(e.rodAngle) * 0.45);
+                    e.mesh.material.opacity = Math.max(0, e.gatherLife);
+                    if (e.gatherLife <= 0) {
+                        e.state = 'wire'; // 耗尽后重生于电源端
+                        e.t = 0;
+                    }
+                }
+            } else {
+                // 阳极(红线)：从OH-夺取电子在碳棒聚集，随后流回电源
+                if (e.state === 'rod') {
+                    e.gatherLife += gatherSpeed * dt; // 逐渐生成 (模拟脱离粒子)
+                    e.rodAngle += 0.05 * dt; // 环绕游走
+                    e.rodY += 0.01 * dt; // 微微向上涌动
+                    e.mesh.position.set(4 + Math.cos(e.rodAngle) * 0.45, e.rodY, Math.sin(e.rodAngle) * 0.45);
+                    e.mesh.material.opacity = Math.min(1, e.gatherLife);
+                    if (e.gatherLife >= 1) { // 聚集完毕，被导线吸入
+                        e.state = 'wire';
+                        e.t = 1; // 导线底部开始
+                    }
+                } else if (e.state === 'wire') {
+                    e.t -= electronSpeed * dt;
+                    e.mesh.material.opacity = 1;
+                    if (e.t <= 0) { // 回到电源内部
+                        e.state = 'rod'; // 在电极重新生成
+                        e.gatherLife = 0;
+                        e.rodAngle = Math.random() * Math.PI * 2;
+                        e.rodY = 1.5 + Math.random() * 4.5;
+                    } else {
+                        e.mesh.position.copy(curveBotPos.getPoint(e.t));
+                    }
+                }
+            }
+        });
+
+        // 游离离子的物理运动
+        ions.forEach(p => {
+            if(!p.active) { p.group.visible = false; return; }
+            Object.values(p.models).forEach(m => m.visible = false); p.models[p.type].visible = true;
+            if (experimentActive && dt > 0) {
+                const E_field = 0.015 * curSpeed;
+                if (p.type === 'H') p.vx -= E_field; else if (p.type === 'OH') p.vx += E_field;
+                p.vx = p.vx * 0.95 + (Math.random()-0.5)*0.01 * curSpeed; p.vy = p.vy * 0.95 + (Math.random()-0.5)*0.01 * curSpeed; p.vz = p.vz * 0.95 + (Math.random()-0.5)*0.01 * curSpeed;
+                p.x += p.vx; p.y += p.vy; p.z += p.vz;
+                const limitX = 7, limitZ = 4.5, limitYMin = 2, limitYMax = 7; 
+                if (p.x < -limitX) { p.x = -limitX; p.vx *= -0.5; } if (p.x > limitX) { p.x = limitX; p.vx *= -0.5; }
+                if (p.y < limitYMin) { p.y = limitYMin; p.vy *= -0.5; } if (p.y > limitYMax) { p.y = limitYMax; p.vy *= -0.5; }
+                if (p.z < -limitZ) { p.z = -limitZ; p.vz *= -0.5; } if (p.z > limitZ) { p.z = limitZ; p.vz *= -0.5; }
+                if (p.type === 'H' && p.x < -3.5) p.x = 2 + Math.random()*4;
+                if (p.type === 'OH' && p.x > 3.5) p.x = -2 - Math.random()*4;
+            }
+            p.group.position.set(p.x, p.y, p.z);
+            if(dt > 0) { p.group.rotation.x += p.rvx * dt; p.group.rotation.y += p.rvy * dt; p.group.rotation.z += p.rvz * dt; }
+            p.group.visible = isMicroView; 
+        });
+
+        clipPlaneLeft.constant = 2 + 9.15 * Math.max(0, 1 - gasCathode/MAX_GAS);
+        clipPlaneRight.constant = 2 + 9.15 * Math.max(0, 1 - gasAnode/MAX_GAS);
+        surfaceLeft.position.y = clipPlaneLeft.constant; surfaceRight.position.y = clipPlaneRight.constant;
+        const updateS = (s, y) => { let ly = y-2; let r = 1.1; if(ly > 8){ let st = (ly-8)/1.15; r = 1.1 * Math.sqrt(1-st*st); } s.scale.set(Math.max(0.001, r), 1, Math.max(0.001, r)); };
+        updateS(surfaceLeft, surfaceLeft.position.y); updateS(surfaceRight, surfaceRight.position.y);
+
+        if(experimentActive && Math.random() < 1.2 * dt) {
+            const b = bubbles.find(bub => !bub.active);
+            if(b) {
+                b.active = true; b.side = Math.random() > 0.3 ? -1 : 1; b.type = b.side === -1 ? 'H2' : 'O2';
+                Object.values(b.models).forEach(m => m.visible = false); b.models[b.type].visible = true;
+                b.isEscaping = (b.side === -1 && gasCathode >= MAX_GAS) || (b.side === 1 && gasAnode >= MAX_GAS);
+                if(b.isEscaping) {
+                    const r = 1.3 + Math.random()*0.5; const a = Math.random()*Math.PI*2;
+                    b.group.position.set((b.side===-1?-4:4) + Math.cos(a)*r, 1.5 + Math.random()*0.5, Math.sin(a)*r); 
+                    b.vy = 0.08 + Math.random()*0.05;
+                } else {
+                    const r = Math.random()*0.6; const a = Math.random()*Math.PI*2;
+                    b.group.position.set((b.side===-1?-4:4) + Math.cos(a)*r, 1.2, Math.sin(a)*r); 
+                    b.vy = 0.05 + Math.random()*0.05;
+                }
+                b.rvx = (Math.random()-0.5)*0.2; b.rvy = (Math.random()-0.5)*0.2; b.rvz = (Math.random()-0.5)*0.2;
+            }
+        }
+        bubbles.forEach(b => {
+            if(!b.active) return; b.group.visible = true; b.group.position.y += b.vy * dt;
+            let limit = b.isEscaping ? 7.2 : (b.side===-1 ? clipPlaneLeft.constant : clipPlaneRight.constant);
+            if(b.group.position.y > limit) { b.active = false; b.group.visible = false; }
+            if(dt > 0) { b.group.rotation.x += b.rvx * dt; b.group.rotation.y += b.rvy * dt; b.group.rotation.z += b.rvz * dt; }
+        });
+
+        renderer.render(scene, camera);
+    }
+
+    document.getElementById('camGlobal').onclick = () => { targetCamPos.set(0,15,35); targetLookAt.set(0,3,0); isAutoCamera=true; };
+    document.getElementById('camCathode').onclick = () => { targetCamPos.set(-4,8,12); targetLookAt.set(-4,5,0); isAutoCamera=true; };
+    document.getElementById('camAnode').onclick = () => { targetCamPos.set(4,8,12); targetLookAt.set(4,5,0); isAutoCamera=true; };
+
+    animate();
+    window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    setTimeout(() => { document.getElementById('loadingScreen').style.opacity = '0'; setTimeout(()=>document.getElementById('loadingScreen').remove(), 600); }, 1000);
+}
+
+window.onload = initApp;
+</script>
+</body>
 </html>
